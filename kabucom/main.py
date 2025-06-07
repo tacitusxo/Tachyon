@@ -37,8 +37,6 @@ try:
     with urllib.request.urlopen(req) as res:
         content = json.loads(res.read())
         token = content.get("Token")
-        logger.info("トークンの発行に成功しました")
-        logger.info(token)
 except urllib.error.HTTPError as e:
     logger.error(e)
     content = json.loads(e.read())
@@ -51,6 +49,8 @@ except Exception as e:
 if not token:
     logger.error("トークンの取得に失敗しました")
     exit(1)
+logger.info("トークンの発行に成功しました")
+logger.info(token)
 
 # トークン発効後にscraperを実行
 logger.info("上方修正監視を開始します...")
