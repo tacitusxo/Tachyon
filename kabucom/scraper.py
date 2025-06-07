@@ -102,41 +102,45 @@ class NikkeiScraper:
 
     def detect_upward_revisions(self) -> List[Dict]:
         """上方修正のニュースを検出する"""
-        html_content = self.fetch_page()
-        if not html_content:
-            return []
+        try:
+            html_content = self.fetch_page()
+            if not html_content:
+                return []
 
-        announcements = self.parse_announcements(html_content)
+            announcements = self.parse_announcements(html_content)
 
-        upward_revisions = []
+            upward_revisions = []
 
-        for announcement in announcements:
-            # 新しい発表かチェック
-            announcement_id = (
-                f"{announcement.get('symbol', '')}-{announcement.get('title', '')[:50]}"
-            )
+            for announcement in announcements:
+                # 新しい発表かチェック
+                announcement_id = (
+                    f"{announcement.get('symbol', '')}-{announcement.get('title', '')[:50]}"
+                )
 
-            # 初回読み込み時は既存のニュースをすべて処理済みとして記録するが、通知はしない
-            if self.is_initial_load:
+                # 初回読み込み時は既存のニュースをすべて処理済みとして記録するが、通知はしない
+                if self.is_initial_load:
+                    self.processed_announcements.add(announcement_id)
+                    continue
+
+                if announcement_id in self.processed_announcements:
+                    continue
+
+                # 上方修正かチェック
+                if self.is_upward_revision(announcement["title"]):
+                    upward_revisions.append(announcement)
+                    logger.info(
+                        f"上方修正を検出: {announcement['company_name']} ({announcement['symbol']})"
+                    )
+                else:
+                    logger.info(
+                        f"上方修正ではない: {announcement['company_name']} ({announcement['symbol']})"
+                    )
                 self.processed_announcements.add(announcement_id)
-                continue
 
-            if announcement_id in self.processed_announcements:
-                continue
-
-            # 上方修正かチェック
-            if self.is_upward_revision(announcement["title"]):
-                upward_revisions.append(announcement)
-                logger.info(
-                    f"上方修正を検出: {announcement['company_name']} ({announcement['symbol']})"
-                )
-            else:
-                logger.info(
-                    f"上方修正ではない: {announcement['company_name']} ({announcement['symbol']})"
-                )
-            self.processed_announcements.add(announcement_id)
-
-        return upward_revisions
+            return upward_revisions
+        except Exception as e:
+            logger.error(f"上方修正の検出中にエラーが発生: {e}")
+            return []
 
     def run_continuous_monitoring(self, interval_minutes: int = 5) -> List[str]:
         """継続的な監視を実行する
