@@ -107,7 +107,6 @@ class NikkeiScraper:
             return []
 
         announcements = self.parse_announcements(html_content)
-        print(announcements[0])
         upward_revisions = []
 
         for announcement in announcements:
