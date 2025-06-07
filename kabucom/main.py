@@ -15,9 +15,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # 環境変数の読み込み
-env_path = os.path.join(os.path.dirname(__file__), ".env")
-logger.info(f"Loading .env from: {env_path}")
-load_dotenv(dotenv_path=env_path)
+try:
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.exists(env_path):
+        logger.info(f"Loading .env from: {env_path}")
+        load_dotenv(dotenv_path=env_path)
+    else:
+        logger.info("No .env file found, using system environment variables")
+except Exception as e:
+    logger.warning(f"Failed to load .env file: {e}")
 
 api_password = os.getenv("KABUCOM_API_PASSWORD")
 if api_password is None:
