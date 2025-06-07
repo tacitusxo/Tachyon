@@ -96,22 +96,8 @@ class NikkeiScraper:
         """上方修正かどうかを判定する"""
         upward_keywords = [
             "上方修正",
-            "業績予想の修正",
-            "増益",
-            "増収増益",
-            "予想を上回",
-            "上振れ",
-            "業績好調",
-            "予想上方",
-            "上方",
-            "増額修正",
-            "アップサイド",
-            "上昇修正",
-            "好業績",
-            "増配",
         ]
 
-        text_lower = text.lower()
         return any(keyword in text for keyword in upward_keywords)
 
     def detect_upward_revisions(self) -> List[Dict]:
