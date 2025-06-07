@@ -129,7 +129,10 @@ class NikkeiScraper:
                 logger.info(
                     f"上方修正を検出: {announcement['company_name']} ({announcement['symbol']})"
                 )
-
+            else:
+                logger.info(
+                    f"上方修正ではない: {announcement['company_name']} ({announcement['symbol']})"
+                )
             self.processed_announcements.add(announcement_id)
 
         return upward_revisions
