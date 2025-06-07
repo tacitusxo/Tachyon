@@ -43,11 +43,8 @@ class NikkeiScraper:
         soup = BeautifulSoup(html_content, "html.parser")
         announcements = []
 
-        # 適時開示のリスト項目を探す
-        disclosure_items = soup.find_all(
-            ["div", "tr", "li"],
-            class_=re.compile(r"(disclosure|release|announcement)", re.I),
-        )
+        # market-table__row-wrapperクラスを持つli要素を探す
+        disclosure_items = soup.find_all("li", class_="market-table__row-wrapper")
 
         for item in disclosure_items:
             announcement = self.extract_announcement_info(item)
@@ -59,46 +56,39 @@ class NikkeiScraper:
     def extract_announcement_info(self, item) -> Optional[Dict]:
         """個別の適時開示情報を抽出する"""
         try:
-            # テキスト内容を取得
-            text = item.get_text(strip=True)
 
-            # 銘柄コードを抽出（4桁の数字パターン）
-            symbol_match = re.search(r"\b(\d{4})\b", text)
-            symbol = symbol_match.group(1) if symbol_match else None
-
-            # 会社名を抽出
-            company_name = self.extract_company_name(text)
+            # market-table__col-company-name--boldクラスから銘柄コードと会社名を抽出
+            company_element = item.find(class_="market-table__col-company-name--bold")
+            symbol = None
+            company_name = None
+            if company_element:
+                company_text = company_element.get_text(strip=True)
+                # 銘柄コードを抽出
+                symbol_match = re.search(r"\b(\d{4})\b", company_text)
+                symbol = symbol_match.group(1) if symbol_match else None
+                # 会社名を抽出（銘柄コードを除去）
+                company_name = re.sub(r"\b\d{4}\b", "", company_text).strip()
+                # 末尾の括弧を除去（会社名の一部として必要な括弧は保持）
+                company_name = re.sub(r"\s*\([^)]*\)$", "", company_name).strip()
 
             # 時刻を抽出
-            time_match = re.search(r"(\d{1,2}:\d{2})", text)
-            announcement_time = time_match.group(1) if time_match else None
+            time_element = item.find(class_="market-table__col-timestamp")
+            announcement_time = time_element.get_text(strip=True) if time_element else None
+
+            # 特定のURLパターンを持つaタグからタイトルを取得
+            a_tag = item.find('a', href=lambda href: href and href.startswith('https://www.nikkei.com/nkd/disclosure/tdnr'))
+            title = a_tag.get_text(strip=True)
 
             if symbol or company_name:
                 return {
                     "symbol": symbol,
                     "company_name": company_name,
-                    "title": text,
+                    "title": title,
                     "time": announcement_time,
                     "timestamp": datetime.now().isoformat(),
                 }
         except Exception as e:
             logger.warning(f"発表情報の抽出エラー: {e}")
-
-        return None
-
-    def extract_company_name(self, text: str) -> Optional[str]:
-        """テキストから会社名を抽出する"""
-        # 株式会社、（株）などのパターンを含む会社名を抽出
-        patterns = [
-            r"([株式会社|㈱]\s*[一-龯ァ-ヶー]+)",
-            r"([一-龯ァ-ヶー]+\s*[株式会社|㈱])",
-            r"([A-Z][a-zA-Z\s&]+(?:Corporation|Corp|Inc|Ltd|Co)\.?)",
-        ]
-
-        for pattern in patterns:
-            match = re.search(pattern, text)
-            if match:
-                return match.group(1).strip()
 
         return None
 
@@ -131,7 +121,7 @@ class NikkeiScraper:
             return []
 
         announcements = self.parse_announcements(html_content)
-        print(announcements)
+        print(announcements[0])
         upward_revisions = []
 
         for announcement in announcements:
