@@ -77,8 +77,7 @@ class NikkeiScraper:
                 return {
                     "symbol": symbol,
                     "company_name": company_name,
-                    "title": text[:100],  # 最初の100文字
-                    "full_text": text,
+                    "title": text,
                     "time": announcement_time,
                     "timestamp": datetime.now().isoformat(),
                 }
@@ -132,6 +131,7 @@ class NikkeiScraper:
             return []
 
         announcements = self.parse_announcements(html_content)
+        print(announcements)
         upward_revisions = []
 
         for announcement in announcements:
@@ -149,7 +149,7 @@ class NikkeiScraper:
                 continue
 
             # 上方修正かチェック
-            if self.is_upward_revision(announcement["full_text"]):
+            if self.is_upward_revision(announcement["title"]):
                 upward_revisions.append(announcement)
                 logger.info(
                     f"上方修正を検出: {announcement['company_name']} ({announcement['symbol']})"
