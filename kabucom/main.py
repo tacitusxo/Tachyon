@@ -1,9 +1,21 @@
 import urllib.request
 import json
 import pprint
+from dotenv import load_dotenv
+import os
 
-# トークン発行
-obj = { 'APIPassword': 'xxxxxx' }
+# 環境変数の読み込み
+env_path = os.path.join(os.path.dirname(__file__), '.env')
+print(f"Loading .env from: {env_path}")
+load_dotenv(dotenv_path=env_path)
+
+api_password = os.getenv('APIPASSWORD')
+if api_password is None:
+    print("Error: APIPASSWORD environment variable is not set")
+    exit(1)
+
+obj = { 'APIPassword': api_password }
+
 json_data = json.dumps(obj).encode('utf8')
 
 url = 'http://localhost:18080/kabusapi/token'
