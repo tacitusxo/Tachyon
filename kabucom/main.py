@@ -19,12 +19,12 @@ env_path = os.path.join(os.path.dirname(__file__), ".env")
 logger.info(f"Loading .env from: {env_path}")
 load_dotenv(dotenv_path=env_path)
 
-api_password = os.getenv("APIPASSWORD")
+api_password = os.getenv("KABUCOM_API_PASSWORD")
 if api_password is None:
-    logger.error("Error: APIPASSWORD environment variable is not set")
+    logger.error("Error: KABUCOM_API_PASSWORD environment variable is not set")
     exit(1)
 
-obj = {"APIPassword": api_password}
+obj = {"KABUCOM_API_PASSWORD": api_password}
 
 json_data = json.dumps(obj).encode("utf8")
 
