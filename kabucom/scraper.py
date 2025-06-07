@@ -2,6 +2,7 @@ import requests
 import re
 import time
 import logging
+import os
 from datetime import datetime
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
@@ -25,6 +26,7 @@ class NikkeiScraper:
         )
         self.processed_announcements = set()
         self.is_initial_load = True
+        self.slack_webhook_url = os.getenv("SLACK_WEBHOOK_URL")
 
     def fetch_page(self) -> Optional[str]:
         """ページを取得する"""
@@ -196,6 +198,65 @@ class NikkeiScraper:
 
         return upward_revision_symbols
 
+    def send_slack_notification(self, revision: Dict):
+        """Slackに通知を送信する"""
+        if not self.slack_webhook_url:
+            logger.warning("SLACK_WEBHOOK_URLが設定されていません")
+            return
+
+        message = {
+            "blocks": [
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": "🔔 上方修正の検出",
+                        "emoji": True
+                    }
+                },
+                {
+                    "type": "section",
+                    "fields": [
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*銘柄コード:*\n{revision.get('symbol', 'N/A')}"
+                        },
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*会社名:*\n{revision.get('company_name', 'N/A')}"
+                        }
+                    ]
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*タイトル:*\n{revision.get('title', 'N/A')}"
+                    }
+                },
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": f"*時刻:* {revision.get('time', 'N/A')}"
+                        }
+                    ]
+                }
+            ]
+        }
+
+        try:
+            response = requests.post(
+                self.slack_webhook_url,
+                json=message,
+                timeout=10
+            )
+            response.raise_for_status()
+            logger.info("Slack通知を送信しました")
+        except Exception as e:
+            logger.error(f"Slack通知の送信に失敗: {e}")
+
     def handle_detected_revision(self, revision: Dict):
         """検出された上方修正を処理する"""
         symbol = revision.get("symbol")
@@ -206,6 +267,9 @@ class NikkeiScraper:
         logger.info(f"会社名: {company_name}")
         logger.info(f"タイトル: {revision.get('title')}")
         logger.info(f"時刻: {revision.get('time')}")
+
+        # Slackに通知を送信
+        self.send_slack_notification(revision)
 
         # ここでkabuステーションAPIを使った処理を追加可能
         if symbol:
