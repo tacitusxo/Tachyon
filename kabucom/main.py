@@ -3,6 +3,7 @@ import json
 import pprint
 from dotenv import load_dotenv
 import os
+from scraper import NikkeiScraper
 
 # 環境変数の読み込み
 env_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -41,6 +42,17 @@ except Exception as e:
 if not token:
     print("トークンの取得に失敗しました")
     exit(1)
+
+# トークン発効後にscraperを実行
+print("上方修正監視を開始します...")
+scraper = NikkeiScraper()
+try:
+    upward_revision_symbols = scraper.run_continuous_monitoring(interval_minutes=5)
+    print("\n上方修正された企業のSymbolのリスト:")
+    for symbol in upward_revision_symbols:
+        print(f"- {symbol}")
+except KeyboardInterrupt:
+    print("\n監視を停止しました")
 
 # 発注
 # order_obj = { 
