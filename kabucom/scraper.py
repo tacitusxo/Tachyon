@@ -75,9 +75,9 @@ class NikkeiScraper:
             time_element = item.find(class_="market-table__col-timestamp")
             announcement_time = time_element.get_text(strip=True) if time_element else None
 
-            # 特定のURLパターンを持つaタグからタイトルを取得
-            a_tag = item.find('a', href=lambda href: href and href.startswith('https://www.nikkei.com/nkd/disclosure/tdnr'))
-            title = a_tag.get_text(strip=True)
+            # 特定のクラスを持つaタグからタイトルを取得
+            a_tag = item.find('a', class_="market-table__col-item market-table__col-desc-link")
+            title = a_tag.get_text(strip=True) if a_tag else None
 
             if symbol or company_name:
                 return {
