@@ -2,8 +2,19 @@ import urllib.request
 import json
 import pprint
 import sys
+import logging
 from config import load_environment_variables
 from kabu_token import get_token
+from utils import calculate_purchase_quantity
+
+# ロギングの設定
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger(__name__)
+
 def get_board_info(symbol, token):
     """
     指定されたシンボルの価格情報を取得する
@@ -35,13 +46,24 @@ def get_board_info(symbol, token):
 
 if __name__ == '__main__':
     # 環境変数を読み込む
-    api_password, _, _ = load_environment_variables()
+    api_password, available_margin, _ = load_environment_variables()
     
     # トークンを取得
     token = get_token(api_password)
     
     # ボード情報を取得
-    result = get_board_info(8117, token)
+    symbol = 8117  # 例として8117（中央精機）を使用
+    result = get_board_info(symbol, token)
     
-    if result:
-        pprint.pprint(result)
+    if result and 'CurrentPrice' in result:
+        price = result['CurrentPrice']
+        logger.info(f"現在の価格: {price}")
+        
+        # 購入可能な株数を計算
+        quantity = calculate_purchase_quantity(price, available_margin)
+        if quantity > 0:
+            logger.info(f"購入可能な株数: {quantity}株")
+        else:
+            logger.warning("購入可能な株数が0株です")
+    else:
+        logger.error("価格情報の取得に失敗しました")
