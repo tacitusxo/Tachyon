@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kabucom"
+version = "0.1.0"
+description = "株価情報を取得するためのツール"
+requires-python = ">=3.8"
+dependencies = [
+    "requests==2.31.0",
+    "beautifulsoup4==4.12.2",
+    "python-dotenv==1.0.0"
+] 
