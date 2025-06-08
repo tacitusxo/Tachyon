@@ -40,3 +40,6 @@ def load_environment_variables():
     logger.info(f"口座種別: {account_type}")
 
     return api_password, available_margin, account_type 
+
+if __name__ == "__main__":
+    load_environment_variables()
