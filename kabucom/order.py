@@ -11,7 +11,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def send_order(token: str, symbol: str, account_type: int, quantity: int = 100):
+def send_order(token: str, symbol: str, account_type: int, quantity: int = 100, price: float = 0):
     """
     指定された銘柄に対して発注を行う
 
@@ -20,6 +20,7 @@ def send_order(token: str, symbol: str, account_type: int, quantity: int = 100):
         symbol (str): 証券コード
         account_type (int): 口座種別
         quantity (int, optional): 注文数量. Defaults to 100.
+        price (float, optional): トリガー価格の基準値. Defaults to 0.
 
     Returns:
         bool: 発注が成功したかどうか
@@ -37,8 +38,8 @@ def send_order(token: str, symbol: str, account_type: int, quantity: int = 100):
         'FrontOrderType': 10,  # 成行注文
         'ExpireDay': 0,
         'ReverseLimitOrder': {
-            'TriggerSec': 3,
-            'TriggerPrice': 0,  # 成行注文のため価格は0
+            'TriggerSec': 1,
+            'TriggerPrice': price * 1.2,  # 価格の1.2倍をトリガー価格として設定
             'UnderOver': 2,
             'AfterHitOrderType': 1,
             'AfterHitPrice': 0

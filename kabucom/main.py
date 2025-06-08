@@ -92,7 +92,7 @@ try:
             # 購入可能な株数を計算
             quantity = calculate_purchase_quantity(price)
             if quantity > 0:
-                if send_order(token, symbol, account_type, quantity):
+                if send_order(token, symbol, account_type, quantity, price):
                     logger.info(f"{symbol}の発注が成功しました（{quantity}株）")
                 else:
                     logger.error(f"{symbol}の発注に失敗しました")
