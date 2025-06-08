@@ -6,6 +6,8 @@ import os
 from datetime import datetime
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
+from unittest.mock import patch, MagicMock
+import argparse
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -259,9 +261,75 @@ class NikkeiScraper:
             logger.info(f"銘柄 {symbol} の監視を開始します")
 
 
-if __name__ == "__main__":
-    scraper = NikkeiScraper()
+def run_tests():
+    """テストを実行する"""
+    logger.info("テストを開始します...")
 
-    # 継続監視を開始
-    upward_revision_symbols = scraper.run_continuous_monitoring(interval_minutes=5)
-    logger.info("上方修正された企業のSymbolのリスト:", upward_revision_symbols)
+    # 上方修正を含むケースのテスト
+    logger.info("上方修正を含むケースのテスト...")
+    mock_response = MagicMock()
+    mock_response.text = """
+    <div class="disclosure-list">
+        <li class="market-table__row-wrapper">
+            <div class="market-table__col-company-name--bold">6013 タクマ</div>
+            <div class="market-table__col-timestamp">15:30</div>
+            <a class="market-table__col-item market-table__col-desc-link">第14次中期経営計画における財務目標の上方修正に関するお知らせ</a>
+        </li>
+    </div>
+    """
+    
+    with patch('requests.Session.get', return_value=mock_response):
+        scraper = NikkeiScraper()
+        scraper.is_initial_load = False
+        result = scraper.detect_upward_revisions()
+        assert len(result) > 0
+        assert "上方修正" in result[0]["title"]
+        logger.info("上方修正を含むケースのテスト: OK")
+
+    # 上方修正を含まないケースのテスト
+    logger.info("上方修正を含まないケースのテスト...")
+    mock_response.text = """
+    <div class="disclosure-list">
+        <li class="market-table__row-wrapper">
+            <div class="market-table__col-company-name--bold">6013 タクマ</div>
+            <div class="market-table__col-timestamp">15:30</div>
+            <a class="market-table__col-item market-table__col-desc-link">ご案内</a>
+        </li>
+    </div>
+    """
+    
+    with patch('requests.Session.get', return_value=mock_response):
+        scraper = NikkeiScraper()
+        scraper.is_initial_load = False
+        result = scraper.detect_upward_revisions()
+        assert len(result) == 0
+        logger.info("上方修正を含まないケースのテスト: OK")
+
+    # 空のページのテスト
+    logger.info("空のページのテスト...")
+    mock_response.text = "<div class='disclosure-list'></div>"
+    
+    with patch('requests.Session.get', return_value=mock_response):
+        scraper = NikkeiScraper()
+        scraper.is_initial_load = False
+        result = scraper.detect_upward_revisions()
+        assert len(result) == 0
+        logger.info("空のページのテスト: OK")
+
+    # ネットワークエラーのテスト
+    logger.info("ネットワークエラーのテスト...")
+    with patch('requests.Session.get', side_effect=Exception("Network error")):
+        scraper = NikkeiScraper()
+        scraper.is_initial_load = False
+        result = scraper.detect_upward_revisions()
+        assert len(result) == 0
+        logger.info("ネットワークエラーのテスト: OK")
+
+    logger.info("すべてのテストが完了しました！")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='日経スクレイパーのテスト実行')
+    parser.add_argument('--test', action='store_true', help='テストモードで実行')
+    args = parser.parse_args()
+    run_tests()
