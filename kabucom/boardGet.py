@@ -1,7 +1,5 @@
 import urllib.request
 import json
-import pprint
-import sys
 import logging
 from config import load_environment_variables
 from kabu_token import get_token
