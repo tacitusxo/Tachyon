@@ -60,7 +60,6 @@ def main():
     
     # トークンの取得
     token = get_token(api_password)
-    logger.info(token)
     return token
 
 if __name__ == "__main__":
