@@ -3,8 +3,7 @@ import json
 import pprint
 import sys
 from config import load_environment_variables
-from token import get_token
-
+from kabu_token import get_token
 def get_board_info(symbol, token):
     """
     指定されたシンボルの価格情報を取得する
