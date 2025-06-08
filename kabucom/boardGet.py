@@ -15,7 +15,7 @@ def get_board_info(symbol, token):
     Returns:
         dict: 価格情報
     """
-    url = f'http://localhost:18080/kabusapi/board/{symbol}'
+    url = f'http://localhost:18080/kabusapi/board/{symbol}@1'
     req = urllib.request.Request(url, method='GET')
     req.add_header('Content-Type', 'application/json')
     req.add_header('X-API-KEY', token)
