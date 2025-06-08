@@ -20,8 +20,8 @@ def load_environment_variables():
         logger.warning(f"Failed to load .env file: {e}")
 
     api_password = os.getenv("KABUCOM_API_PASSWORD")
-    available_margin = float(os.getenv("AVAILABLE_MARGIN", "0"))
-    account_type = int(os.getenv("KABUCOM_ACCOUNT_TYPE", "2"))
+    available_margin = float(os.getenv("AVAILABLE_MARGIN"))
+    account_type = int(os.getenv("KABUCOM_ACCOUNT_TYPE"))
 
     if api_password is None:
         logger.error("Error: KABUCOM_API_PASSWORD environment variable is not set")
