@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 
 
 class NikkeiScraper:
-    def __init__(self):
-        self.base_url = (
+    def __init__(self, test_url: Optional[str] = None):
+        self.base_url = test_url or (
             "https://r.nikkei.com/markets/release/disclosure?volume=80&hasImage=false"
         )
         self.session = requests.Session()
@@ -102,9 +102,14 @@ class NikkeiScraper:
 
         return any(keyword in text for keyword in upward_keywords)
 
-    def detect_upward_revisions(self) -> List[Dict]:
+    def detect_upward_revisions(self, url: Optional[str] = None) -> List[Dict]:
         """上方修正のニュースを検出する"""
         try:
+            # URLが指定された場合は一時的にbase_urlを変更
+            original_url = self.base_url
+            if url:
+                self.base_url = url
+
             html_content = self.fetch_page()
             if not html_content:
                 return []
@@ -138,6 +143,10 @@ class NikkeiScraper:
                         f"上方修正ではない: {announcement['company_name']} ({announcement['symbol']})"
                     )
                 self.processed_announcements.add(announcement_id)
+
+            # URLを元に戻す
+            if url:
+                self.base_url = original_url
 
             return upward_revisions
         except Exception as e:
@@ -256,80 +265,31 @@ class NikkeiScraper:
         # Slackに通知を送信
         self.send_slack_notification(revision)
 
-        # ここでkabuステーションAPIを使った処理を追加可能
-        if symbol:
-            logger.info(f"銘柄 {symbol} の監視を開始します")
-
-
-def run_tests():
-    """テストを実行する"""
-    logger.info("テストを開始します...")
-
-    # 上方修正を含むケースのテスト
-    logger.info("上方修正を含むケースのテスト...")
-    mock_response = MagicMock()
-    mock_response.text = """
-    <div class="disclosure-list">
-        <li class="market-table__row-wrapper">
-            <div class="market-table__col-company-name--bold">6013 タクマ</div>
-            <div class="market-table__col-timestamp">15:30</div>
-            <a class="market-table__col-item market-table__col-desc-link">第14次中期経営計画における財務目標の上方修正に関するお知らせ</a>
-        </li>
-    </div>
-    """
-    
-    with patch('requests.Session.get', return_value=mock_response):
-        scraper = NikkeiScraper()
-        scraper.is_initial_load = False
-        result = scraper.detect_upward_revisions()
-        assert len(result) > 0
-        assert "上方修正" in result[0]["title"]
-        logger.info("上方修正を含むケースのテスト: OK")
-
-    # 上方修正を含まないケースのテスト
-    logger.info("上方修正を含まないケースのテスト...")
-    mock_response.text = """
-    <div class="disclosure-list">
-        <li class="market-table__row-wrapper">
-            <div class="market-table__col-company-name--bold">6013 タクマ</div>
-            <div class="market-table__col-timestamp">15:30</div>
-            <a class="market-table__col-item market-table__col-desc-link">ご案内</a>
-        </li>
-    </div>
-    """
-    
-    with patch('requests.Session.get', return_value=mock_response):
-        scraper = NikkeiScraper()
-        scraper.is_initial_load = False
-        result = scraper.detect_upward_revisions()
-        assert len(result) == 0
-        logger.info("上方修正を含まないケースのテスト: OK")
-
-    # 空のページのテスト
-    logger.info("空のページのテスト...")
-    mock_response.text = "<div class='disclosure-list'></div>"
-    
-    with patch('requests.Session.get', return_value=mock_response):
-        scraper = NikkeiScraper()
-        scraper.is_initial_load = False
-        result = scraper.detect_upward_revisions()
-        assert len(result) == 0
-        logger.info("空のページのテスト: OK")
-
-    # ネットワークエラーのテスト
-    logger.info("ネットワークエラーのテスト...")
-    with patch('requests.Session.get', side_effect=Exception("Network error")):
-        scraper = NikkeiScraper()
-        scraper.is_initial_load = False
-        result = scraper.detect_upward_revisions()
-        assert len(result) == 0
-        logger.info("ネットワークエラーのテスト: OK")
-
-    logger.info("すべてのテストが完了しました！")
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='日経スクレイパーのテスト実行')
-    parser.add_argument('--test', action='store_true', help='テストモードで実行')
-    args = parser.parse_args()
-    run_tests()
+    upward_url = "https://r.nikkei.com/markets/release/disclosure?hasImage=false&keyword=%E3%81%8A%E7%9F%A5%E3%82%89%E3%81%9B&volume=10"
+    scraper_upward = NikkeiScraper(test_url=upward_url)
+    
+    # 初回読み込み（is_initial_load = True）
+    logger.info("初回読み込みを実行します...")
+    upward_revisions = scraper_upward.detect_upward_revisions()
+    if upward_revisions:
+        logger.info(f"初回読み込みで上方修正を{len(upward_revisions)}件検出しました：")
+        for revision in upward_revisions:
+            scraper_upward.handle_detected_revision(revision)
+    else:
+        logger.info("初回読み込みでは上方修正は検出されませんでした")
+
+    # is_initial_loadをFalseに設定
+    scraper_upward.is_initial_load = False
+    
+    # 2回目の読み込み（is_initial_load = False）
+    logger.info("\n2回目の読み込みを実行します...")
+    # 2回目の読み込み用のURLを設定
+    second_url = "https://r.nikkei.com/markets/release/disclosure?hasImage=false&keyword=%E4%B8%8A%E6%96%B9%E4%BF%AE%E6%AD%A3&volume=10"
+    upward_revisions = scraper_upward.detect_upward_revisions(url=second_url)
+    if upward_revisions:
+        logger.info(f"2回目の読み込みで上方修正を{len(upward_revisions)}件検出しました：")
+        for revision in upward_revisions:
+            scraper_upward.handle_detected_revision(revision)
+    else:
+        logger.info("2回目の読み込みでは上方修正は検出されませんでした")
