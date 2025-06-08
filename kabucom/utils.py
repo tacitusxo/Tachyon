@@ -31,3 +31,7 @@ def calculate_purchase_quantity(price: float, available_margin: float) -> int:
         return 0
         
     return quantity 
+
+if __name__ == "__main__":
+   quantity = calculate_purchase_quantity(100, 1000000)
+   logger.info(f"購入可能な株数: {quantity}株")
