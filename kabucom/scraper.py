@@ -8,12 +8,23 @@ from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 from unittest.mock import patch, MagicMock
 import argparse
+from dotenv import load_dotenv
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
+# 環境変数の読み込み
+try:
+    env_path = os.path.join(os.path.dirname(__file__), ".env")
+    if os.path.exists(env_path):
+        logger.info(f"Loading .env from: {env_path}")
+        load_dotenv(dotenv_path=env_path)
+    else:
+        logger.info("No .env file found, using system environment variables")
+except Exception as e:
+    logger.warning(f"Failed to load .env file: {e}")
 
 class NikkeiScraper:
     def __init__(self, test_url: Optional[str] = None):
