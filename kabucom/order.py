@@ -11,14 +11,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def send_order(token: str, symbol: str, price: float, quantity: int = 100):
+def send_order(token: str, symbol: str, account_type: int, quantity: int = 100):
     """
     指定された銘柄に対して発注を行う
 
     Args:
         token (str): APIトークン
         symbol (str): 証券コード
-        price (float): 注文価格
+        account_type (int): 口座種別
         quantity (int, optional): 注文数量. Defaults to 100.
 
     Returns:
@@ -32,14 +32,13 @@ def send_order(token: str, symbol: str, price: float, quantity: int = 100):
         'CashMargin': 1,
         'DelivType': 2,
         'FundType': 'AA',
-        'AccountType': 2,
+        'AccountType': account_type,
         'Qty': quantity,
-        'FrontOrderType': 30,
-        'Price': price,
+        'FrontOrderType': 10,  # 成行注文
         'ExpireDay': 0,
         'ReverseLimitOrder': {
             'TriggerSec': 3,
-            'TriggerPrice': price * 0.8,  # 20%下がったら損切り
+            'TriggerPrice': 0,  # 成行注文のため価格は0
             'UnderOver': 2,
             'AfterHitOrderType': 1,
             'AfterHitPrice': 0
@@ -72,5 +71,5 @@ if __name__ == "__main__":
     # テスト用のコード
     token = "your_token_here"  # 実際のトークンを設定してください
     symbol = "9433"  # NTTドコモ
-    price = 2762.5
-    send_order(token, symbol, price)
+    account_type = 2  # デフォルト値
+    send_order(token, symbol, account_type)

@@ -31,6 +31,7 @@ except Exception as e:
 # 必要な環境変数の読み込み
 api_password = os.getenv("KABUCOM_API_PASSWORD")
 available_margin = float(os.getenv("AVAILABLE_MARGIN", "0"))
+account_type = int(os.getenv("KABUCOM_ACCOUNT_TYPE", "2"))
 
 if api_password is None:
     logger.error("Error: KABUCOM_API_PASSWORD environment variable is not set")
@@ -40,7 +41,9 @@ if available_margin <= 0:
     logger.error("Error: AVAILABLE_MARGIN environment variable is not set or invalid")
     exit(1)
 
+logger.info(f"APIパスワード: {api_password}")
 logger.info(f"利用可能な余力: {available_margin:,.0f}円")
+logger.info(f"口座種別: {account_type}")
 
 obj = {"APIPassword": api_password}
 
@@ -89,7 +92,7 @@ try:
             # 購入可能な株数を計算
             quantity = calculate_purchase_quantity(price)
             if quantity > 0:
-                if send_order(token, symbol, price, quantity):
+                if send_order(token, symbol, account_type, quantity):
                     logger.info(f"{symbol}の発注が成功しました（{quantity}株）")
                 else:
                     logger.error(f"{symbol}の発注に失敗しました")
