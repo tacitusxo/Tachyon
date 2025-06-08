@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import os
 import logging
 from scraper import NikkeiScraper
+from order import send_order
 
 # ロギングの設定
 logging.basicConfig(
@@ -69,50 +70,12 @@ try:
     logger.info("\n上方修正された企業のSymbolのリスト:")
     for symbol in upward_revision_symbols:
         logger.info(f"- {symbol}")
+        # 上方修正された銘柄に対して発注を実行
+        # 注：実際の運用では、より詳細な価格分析やリスク管理が必要です
+        price = 2762.5  # この価格は実際の市場価格に基づいて設定する必要があります
+        if send_order(token, symbol, price):
+            logger.info(f"{symbol}の発注が成功しました")
+        else:
+            logger.error(f"{symbol}の発注に失敗しました")
 except KeyboardInterrupt:
     logger.info("\n監視を停止しました")
-
-# 発注
-# order_obj = {
-#     'Symbol': '9433',
-#     'Exchange': 1,
-#     'SecurityType': 1,
-#     'Side': '2',
-#     'CashMargin': 1,
-#     'DelivType': 2,
-#     'FundType': 'AA',
-#     'AccountType': 2,
-#     'Qty': 100,
-#     'FrontOrderType': 30,
-#     'Price': 2762.5,
-#     'ExpireDay': 0,
-#     'ReverseLimitOrder': {
-#         'TriggerSec': 3,
-#         'TriggerPrice': 1600,
-#         'UnderOver': 2,
-#         'AfterHitOrderType': 1,
-#         'AfterHitPrice': 0
-#     }
-# }
-# order_json_data = json.dumps(order_obj).encode('utf-8')
-
-# order_url = 'http://localhost:18080/kabusapi/sendorder'
-# order_req = urllib.request.Request(order_url, order_json_data, method='POST')
-# order_req.add_header('Content-Type', 'application/json')
-# order_req.add_header('X-API-KEY', token)
-
-# try:
-#     with urllib.request.urlopen(order_req) as res:
-#         print("\n発注結果:")
-#         print(res.status, res.reason)
-#         for header in res.getheaders():
-#             print(header)
-#         print()
-#         content = json.loads(res.read())
-#         pprint.pprint(content)
-# except urllib.error.HTTPError as e:
-#     print(e)
-#     content = json.loads(e.read())
-#     pprint.pprint(content)
-# except Exception as e:
-#     print(e)
