@@ -6,6 +6,7 @@ import os
 import logging
 from scraper import NikkeiScraper
 from order import send_order
+from boardGet import get_board_info
 
 # ロギングの設定
 logging.basicConfig(
@@ -71,11 +72,15 @@ try:
     for symbol in upward_revision_symbols:
         logger.info(f"- {symbol}")
         # 上方修正された銘柄に対して発注を実行
-        # 注：実際の運用では、より詳細な価格分析やリスク管理が必要です
-        price = 2762.5  # この価格は実際の市場価格に基づいて設定する必要があります
-        if send_order(token, symbol, price):
-            logger.info(f"{symbol}の発注が成功しました")
+        board_info = get_board_info(symbol)
+        if board_info and 'CurrentPrice' in board_info:
+            price = board_info['CurrentPrice']
+            logger.info(f"現在の価格: {price}")
+            if send_order(token, symbol, price):
+                logger.info(f"{symbol}の発注が成功しました")
+            else:
+                logger.error(f"{symbol}の発注に失敗しました")
         else:
-            logger.error(f"{symbol}の発注に失敗しました")
+            logger.error(f"{symbol}の価格情報の取得に失敗しました")
 except KeyboardInterrupt:
     logger.info("\n監視を停止しました")
