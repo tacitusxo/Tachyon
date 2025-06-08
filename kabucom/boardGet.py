@@ -2,12 +2,8 @@ import urllib.request
 import json
 import pprint
 import sys
-import os
-from dotenv import load_dotenv
+from config import load_environment_variables
 from token import get_token
-
-# .envファイルから環境変数を読み込む
-load_dotenv()
 
 def get_board_info(symbol, token):
     """
@@ -39,11 +35,8 @@ def get_board_info(symbol, token):
         return None
 
 if __name__ == '__main__':
-    # 環境変数からAPIパスワードを取得
-    api_password = os.getenv("KABUCOM_API_PASSWORD")
-    if api_password is None:
-        print("Error: KABUCOM_API_PASSWORD environment variable is not set")
-        sys.exit(1)
+    # 環境変数を読み込む
+    api_password, _, _ = load_environment_variables()
     
     # トークンを取得
     token = get_token(api_password)
