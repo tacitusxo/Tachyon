@@ -26,11 +26,12 @@ except Exception as e:
     logger.warning(f"Failed to load .env file: {e}")
 
 api_password = os.getenv("KABUCOM_API_PASSWORD")
+
 if api_password is None:
     logger.error("Error: KABUCOM_API_PASSWORD environment variable is not set")
     exit(1)
 
-obj = {"KABUCOM_API_PASSWORD": api_password}
+obj = {"APIPassword": api_password}
 
 json_data = json.dumps(obj).encode("utf8")
 
