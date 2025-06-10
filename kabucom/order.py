@@ -40,10 +40,11 @@ def send_order(token: str, symbol: str, account_type: int, quantity: int = 100, 
         'AccountType': account_type,
         'Qty': quantity,
         'FrontOrderType': 10,  # 成行注文
+        'Price': 0,
         'ExpireDay': 0,
         'ReverseLimitOrder': {
             'TriggerSec': 1,
-            'TriggerPrice': price * 1.2,  # 価格の1.2倍をトリガー価格として設定
+            'TriggerPrice': float(price * 1.2),  # 価格の1.2倍をトリガー価格として設定（double型）
             'UnderOver': 2,
             'AfterHitOrderType': 1,
             'AfterHitPrice': 0
