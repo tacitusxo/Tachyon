@@ -35,7 +35,7 @@ def send_order(token: str, symbol: str, account_type: int, quantity: int, price:
         'SecurityType': 1,
         'Side': '2',  # 買い注文
         'CashMargin': 1,  # 現物取引
-        'DelivType': 0,  # 指定なし
+        'DelivType': 2,  
         'FundType': '02',
         'AccountType': account_type,
         'Qty': quantity,
