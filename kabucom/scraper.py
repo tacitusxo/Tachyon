@@ -191,6 +191,9 @@ class NikkeiScraper:
                         # Symbolをリストに追加
                         if revision.get("symbol"):
                             upward_revision_symbols.append(revision["symbol"])
+                            return upward_revision_symbols
+                else:
+                    logger.info("上方修正は検出されませんでした")
 
                 time.sleep(interval_minutes * 60)
 
@@ -201,7 +204,6 @@ class NikkeiScraper:
                 logger.error(f"監視中にエラーが発生: {e}")
                 time.sleep(60)  # エラー時は1分待機
 
-        return upward_revision_symbols
 
     def send_slack_notification(self, revision: Dict):
         """Slackに通知を送信する"""
