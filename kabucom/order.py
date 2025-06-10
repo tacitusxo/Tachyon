@@ -44,7 +44,7 @@ def send_order(token: str, symbol: str, account_type: int, quantity: int, price:
         'ExpireDay': 0,
         'ReverseLimitOrder': {
             'TriggerSec': 1,
-            'TriggerPrice': float(price * 1.2),  # 価格の1.2倍をトリガー価格として設定（double型）
+            'TriggerPrice': float(price * 1.2),  # 価格の1.2倍をトリガー価格として設定
             'UnderOver': 2,
             'AfterHitOrderType': 1,
             'AfterHitPrice': 0
