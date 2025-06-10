@@ -36,7 +36,7 @@ def send_order(token: str, symbol: str, account_type: int, quantity: int = 100, 
         'Side': '2',  # 買い注文
         'CashMargin': 1,  # 現物取引
         'DelivType': 0,  # 指定なし
-        'FundType': 'AA',
+        'FundType': '02',  # 現物買いの場合は空文字列
         'AccountType': account_type,
         'Qty': quantity,
         'FrontOrderType': 10,  # 成行注文
