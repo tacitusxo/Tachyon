@@ -56,7 +56,7 @@ def main():
     メイン関数
     """
     # 環境変数の読み込み
-    api_password, _, _ = load_environment_variables()
+    api_password, _, _, _ = load_environment_variables()
     
     # トークンの取得
     token = get_token(api_password)

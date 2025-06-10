@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 def main():
     # 環境変数の読み込み
-    api_password, available_margin, account_type = load_environment_variables()
+    api_password, available_margin, account_type, interval_seconds = load_environment_variables()
     
     # トークンの取得
     token = get_token(api_password)
@@ -29,7 +29,7 @@ def main():
     scraper = NikkeiScraper()
     try:
         upward_revision_symbols = scraper.run_continuous_monitoring(
-            interval_seconds=1
+            interval_seconds=interval_seconds
         )
         logger.info("\n上方修正された企業のSymbolのリスト:")
         for symbol in upward_revision_symbols:

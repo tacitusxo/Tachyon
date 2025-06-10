@@ -75,7 +75,7 @@ def send_order(token: str, symbol: str, account_type: int, quantity: int, price:
 
 if __name__ == "__main__":
     # 環境変数を読み込む
-    api_password, available_margin, account_type = load_environment_variables()
+    api_password, available_margin, account_type, _ = load_environment_variables()
     
     # トークンを取得
     token = get_token(api_password)

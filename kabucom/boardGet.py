@@ -44,7 +44,7 @@ def get_board_info(symbol, token):
 
 if __name__ == '__main__':
     # 環境変数を読み込む
-    api_password, available_margin, _ = load_environment_variables()
+    api_password, available_margin, _, _ = load_environment_variables()
     
     # トークンを取得
     token = get_token(api_password)

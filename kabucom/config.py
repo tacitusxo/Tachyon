@@ -22,6 +22,7 @@ def load_environment_variables():
     api_password = os.getenv("KABUCOM_API_PASSWORD")
     available_margin = float(os.getenv("AVAILABLE_MARGIN"))
     account_type = int(os.getenv("KABUCOM_ACCOUNT_TYPE"))
+    interval_seconds = int(os.getenv("MONITORING_INTERVAL_SECONDS", "1"))
 
     if api_password is None:
         logger.error("Error: KABUCOM_API_PASSWORD environment variable is not set")
@@ -38,8 +39,9 @@ def load_environment_variables():
     logger.info(f"APIパスワード: {api_password}")
     logger.info(f"利用可能な余力: {available_margin:,.0f}円")
     logger.info(f"口座種別: {account_type}")
+    logger.info(f"監視間隔: {interval_seconds}秒")
 
-    return api_password, available_margin, account_type 
+    return api_password, available_margin, account_type, interval_seconds
 
 if __name__ == "__main__":
     load_environment_variables()
