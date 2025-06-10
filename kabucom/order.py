@@ -15,7 +15,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def send_order(token: str, symbol: str, account_type: int, quantity: int = 100, price: float = 0):
+def send_order(token: str, symbol: str, account_type: int, quantity: int, price: float):
     """
     指定された銘柄に対して発注を行う
 
