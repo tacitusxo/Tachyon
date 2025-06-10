@@ -164,13 +164,16 @@ class NikkeiScraper:
             logger.error(f"上方修正の検出中にエラーが発生: {e}")
             return []
 
-    def run_continuous_monitoring(self, interval_minutes: int = 5) -> List[str]:
+    def run_continuous_monitoring(self, interval_seconds: int = 30) -> List[str]:
         """継続的な監視を実行する
+
+        Args:
+            interval_seconds (int): 監視間隔（秒）
 
         Returns:
             List[str]: 上方修正された企業のSymbolのリスト
         """
-        logger.info(f"上方修正監視を開始します（{interval_minutes}分間隔）")
+        logger.info(f"上方修正監視を開始します（{interval_seconds}秒間隔）")
 
         # 上方修正された企業のSymbolを保持するリスト
         upward_revision_symbols = []
@@ -195,15 +198,14 @@ class NikkeiScraper:
                 else:
                     logger.info("上方修正は検出されませんでした")
 
-                time.sleep(interval_minutes * 60)
+                time.sleep(interval_seconds)
 
             except KeyboardInterrupt:
                 logger.info("監視を停止します")
                 break
             except Exception as e:
                 logger.error(f"監視中にエラーが発生: {e}")
-                time.sleep(60)  # エラー時は1分待機
-
+                time.sleep(10)  # エラー時は10秒待機
 
     def send_slack_notification(self, revision: Dict):
         """Slackに通知を送信する"""

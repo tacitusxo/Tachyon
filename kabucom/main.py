@@ -29,7 +29,7 @@ def main():
     scraper = NikkeiScraper()
     try:
         upward_revision_symbols = scraper.run_continuous_monitoring(
-            interval_minutes=1
+            interval_seconds=1
         )
         logger.info("\n上方修正された企業のSymbolのリスト:")
         for symbol in upward_revision_symbols:
