@@ -81,7 +81,7 @@ if __name__ == "__main__":
     token = get_token(api_password)
     
     # テスト用の銘柄
-    symbol = "9433"  # KDDI
+    symbol = "6573"  # KDDI
     
     # ボード情報を取得
     board_info = get_board_info(symbol, token)
