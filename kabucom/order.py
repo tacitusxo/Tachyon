@@ -2,6 +2,10 @@ import urllib.request
 import json
 import pprint
 import logging
+from config import load_environment_variables
+from kabu_token import get_token
+from boardGet import get_board_info
+from utils import calculate_purchase_quantity
 
 # ロギングの設定
 logging.basicConfig(
@@ -69,8 +73,30 @@ def send_order(token: str, symbol: str, account_type: int, quantity: int = 100, 
         return False
 
 if __name__ == "__main__":
-    # テスト用のコード
-    token = "your_token_here"  # 実際のトークンを設定してください
-    symbol = "9433"  # NTTドコモ
-    account_type = 2  # デフォルト値
-    send_order(token, symbol, account_type)
+    # 環境変数を読み込む
+    api_password, available_margin, account_type = load_environment_variables()
+    
+    # トークンを取得
+    token = get_token(api_password)
+    
+    # テスト用の銘柄
+    symbol = "9433"  # KDDI
+    
+    # ボード情報を取得
+    board_info = get_board_info(symbol, token)
+    if board_info and 'CurrentPrice' in board_info:
+        price = board_info['CurrentPrice']
+        logger.info(f"現在の価格: {price}")
+        
+        # 購入可能な株数を計算
+        quantity = calculate_purchase_quantity(price, available_margin)
+        if quantity > 0:
+            logger.info(f"{symbol}の購入可能な株数: {quantity}株")
+            if send_order(token, symbol, account_type, quantity, price):
+                logger.info(f"{symbol}の発注が成功しました（{quantity}株）")
+            else:
+                logger.error(f"{symbol}の発注に失敗しました")
+        else:
+            logger.error(f"{symbol}の購入可能な株数が0株のため、発注をスキップします")
+    else:
+        logger.error(f"{symbol}の価格情報の取得に失敗しました")
