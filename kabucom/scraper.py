@@ -141,17 +141,21 @@ class NikkeiScraper:
                     continue
 
                 if announcement_id in self.processed_announcements:
+                    if announcement_id == f"{announcements[0].get('symbol', '')}-{announcements[0].get('title', '')[:50]}":
+                        logger.info(
+                            f"既に処理済みの発表: {announcement['company_name']} ({announcement['symbol']}) - {announcement['title'][:50]}..."
+                        )
                     continue
 
                 # 上方修正かチェック
                 if self.is_upward_revision(announcement["title"]):
                     upward_revisions.append(announcement)
                     logger.info(
-                        f"上方修正を検出: {announcement['company_name']} ({announcement['symbol']})"
+                        f"上方修正を検出: {announcement['company_name']} ({announcement['symbol']}) - {announcement['title'][:50]}..."
                     )
                 else:
                     logger.info(
-                        f"上方修正ではない: {announcement['company_name']} ({announcement['symbol']})"
+                        f"上方修正ではない: {announcement['company_name']} ({announcement['symbol']}) - {announcement['title'][:50]}..."
                     )
                 self.processed_announcements.add(announcement_id)
 
@@ -195,8 +199,6 @@ class NikkeiScraper:
                         if revision.get("symbol"):
                             upward_revision_symbols.append(revision["symbol"])
                             return upward_revision_symbols
-                else:
-                    logger.info("上方修正は検出されませんでした")
 
                 time.sleep(interval_seconds)
 
