@@ -76,13 +76,11 @@ class NikkeiScraper:
             company_name = None
             if company_element:
                 company_text = company_element.get_text(strip=True)
-                # 銘柄コードを抽出
-                symbol_match = re.search(r"\b(\d{4})\b", company_text)
+                # 括弧内の銘柄コード（数字とアルファベットの組み合わせ）を抽出
+                symbol_match = re.search(r"[\(（]([0-9A-Za-z]+)[\)）]", company_text)
                 symbol = symbol_match.group(1) if symbol_match else None
-                # 会社名を抽出（銘柄コードを除去）
-                company_name = re.sub(r"\b\d{4}\b", "", company_text).strip()
-                # 全角・半角の括弧とその中身を除去
-                company_name = re.sub(r"\s*[\(（][^）\)]*[）\)]", "", company_name).strip()
+                # 会社名を抽出（括弧部分を除去）
+                company_name = re.sub(r"[\(（][0-9A-Za-z]+[\)）]", "", company_text).strip()
 
             # 時刻を抽出
             time_element = item.find(class_="market-table__col-timestamp")
