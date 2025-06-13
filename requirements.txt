@@ -4,19 +4,21 @@
 #
 #    pip-compile pyproject.toml
 #
-beautifulsoup4==4.12.2
+beautifulsoup4>=4.12.3
     # via kabucom (pyproject.toml)
-certifi==2025.4.26
+certifi>=2025.4.26
     # via requests
-charset-normalizer==3.4.2
+charset-normalizer>=3.4.2
     # via requests
-idna==3.10
+idna>=3.10
     # via requests
-python-dotenv==1.0.0
+jpholiday>=0.1.8
     # via kabucom (pyproject.toml)
-requests==2.31.0
+python-dotenv>=1.0.0
     # via kabucom (pyproject.toml)
-soupsieve==2.7
+requests>=2.32.0
+    # via kabucom (pyproject.toml)
+soupsieve>=2.7
     # via beautifulsoup4
-urllib3==2.4.0
+urllib3>=2.4.0
     # via requests

@@ -8,7 +8,6 @@ import jpholiday
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 from unittest.mock import patch, MagicMock
-import argparse
 from dotenv import load_dotenv
 
 logging.basicConfig(
