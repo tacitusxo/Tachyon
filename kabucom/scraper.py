@@ -3,7 +3,8 @@ import re
 import time
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, time as dt_time, timedelta
+import jpholiday
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional
 from unittest.mock import patch, MagicMock
@@ -166,6 +167,51 @@ class NikkeiScraper:
             logger.error(f"上方修正の検出中にエラーが発生: {e}")
             return []
 
+    def is_trading_time(self) -> bool:
+        """現在が取引時間内かどうかを判定する"""
+        now = datetime.now()
+        
+        # 土日祝日は取引なし
+        if now.weekday() >= 5 or jpholiday.is_holiday(now.date()):
+            return False
+        
+        current_time = now.time()
+        
+        # 前場: 9:00-11:30
+        morning_start = dt_time(9, 0)
+        morning_end = dt_time(11, 30)
+        
+        # 後場: 12:30-15:00
+        afternoon_start = dt_time(12, 30)
+        afternoon_end = dt_time(15, 0)
+        
+        return (morning_start <= current_time <= morning_end) or (afternoon_start <= current_time <= afternoon_end)
+
+    def get_next_trading_time(self) -> datetime:
+        """次の取引開始時刻を取得する"""
+        now = datetime.now()
+        
+        # 現在時刻が前場終了後、後場開始前の場合
+        if dt_time(11, 30) < now.time() < dt_time(12, 30):
+            next_time = now.replace(hour=12, minute=30, second=0, microsecond=0)
+            return next_time
+        
+        # 現在時刻が後場終了後の場合
+        if now.time() > dt_time(15, 0):
+            # 翌日の前場開始時刻
+            next_time = now.replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            # 土日祝日の場合は次の営業日までスキップ
+            while next_time.weekday() >= 5 or jpholiday.is_holiday(next_time.date()):
+                next_time += timedelta(days=1)
+            return next_time
+        
+        # 現在時刻が前場開始前の場合
+        if now.time() < dt_time(9, 0):
+            next_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
+            return next_time
+        
+        return now
+
     def run_continuous_monitoring(self, interval_seconds: int = 30) -> List[str]:
         """継続的な監視を実行する
 
@@ -180,14 +226,26 @@ class NikkeiScraper:
         # 上方修正された企業のSymbolを保持するリスト
         upward_revision_symbols = []
 
-        # 初回読み込みで既存のニュースを記録
-        logger.info("初回読み込み中...")
-        self.detect_upward_revisions()
-        self.is_initial_load = False
-        logger.info("初回読み込み完了。新しい上方修正のニュースを監視開始します。")
-
         while True:
             try:
+                # 取引時間外の場合
+                if not self.is_trading_time():
+                    next_trading_time = self.get_next_trading_time()
+                    logger.info(f"取引時間外です。次の取引開始時刻 {next_trading_time} まで待機します。")
+                    
+                    # 次の取引開始時刻まで待機
+                    while datetime.now() < next_trading_time:
+                        time.sleep(60)  # 1分ごとにチェック
+                    
+                    # 取引開始時に初回読み込みを実行
+                    logger.info("取引開始時刻になりました。初回読み込みを実行します。")
+                    self.is_initial_load = True
+                    self.detect_upward_revisions()
+                    self.is_initial_load = False
+                    logger.info("初回読み込み完了。新しい上方修正のニュースを監視開始します。")
+                    continue
+
+                # 取引時間内の場合
                 upward_revisions = self.detect_upward_revisions()
 
                 if upward_revisions:
