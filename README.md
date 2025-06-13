@@ -30,6 +30,14 @@
    - 異常値の検出とアラート通知
    - システム状態の定期的な健康チェック
 
+## 市場の営業時間と監視の挙動
+
+- 監視は 24 時間 365 日継続して行われます
+- 市場が閉まっている時間帯（夜間・休日）は監視のみを行い、自動売買は実行されません
+- 市場が開いている時間帯（9:00-11:30, 12:30-15:10）のみ自動売買が実行されます
+- 市場が閉まっている時間帯に上方修正が検出された場合、次の取引開始時に自動売買が実行されます
+- システムの状態は定期的に Slack に通知されます
+
 ## 環境構築
 
 1. Python 3.8 以上をインストール
@@ -44,8 +52,9 @@ pip install -r requirements.txt
 `.env`ファイルを作成し、以下の環境変数を設定してください：
 
 ```
-API_PASSWORD=your_api_password
-AVAILABLE_MARGIN=1000000
-ACCOUNT_TYPE=特定口座
-MONITORING_INTERVAL_SECONDS=30  # 監視間隔（秒）
+KABUCOM_API_PASSWORD=apipassword  # kabu.comのAPIパスワード
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/~~~~  # Slack通知用のWebhook URL
+AVAILABLE_MARGIN=XXXXXX  # 利用可能な証拠金（円）
+KABUCOM_ACCOUNT_TYPE=XXX  # kabu.comの口座種別（2:一般口座、4:特定口座、12:法人口座）
+MONITORING_INTERVAL_SECONDS=1  # 監視間隔（秒）
 ```
