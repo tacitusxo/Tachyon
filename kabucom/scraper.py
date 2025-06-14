@@ -190,6 +190,17 @@ class NikkeiScraper:
         """次の取引開始時刻を取得する"""
         now = datetime.now()
         
+        # 土日祝日の場合は次の営業日の前場開始時刻を返す
+        if now.weekday() >= 5 or jpholiday.is_holiday(now.date()):
+            next_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
+            # 同日が土日祝日の場合は翌日から開始
+            if now.weekday() >= 5 or jpholiday.is_holiday(now.date()):
+                next_time += timedelta(days=1)
+            # 土日祝日をスキップ
+            while next_time.weekday() >= 5 or jpholiday.is_holiday(next_time.date()):
+                next_time += timedelta(days=1)
+            return next_time
+        
         # 現在時刻が前場終了後、後場開始前の場合
         if dt_time(11, 30) < now.time() < dt_time(12, 30):
             next_time = now.replace(hour=12, minute=30, second=0, microsecond=0)
