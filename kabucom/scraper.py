@@ -161,6 +161,10 @@ class NikkeiScraper:
             if url:
                 self.base_url = original_url
 
+            # 初回読み込み完了後にフラグをfalseに設定
+            if self.is_initial_load:
+                self.is_initial_load = False
+
             return upward_revisions
         except Exception as e:
             logger.error(f"上方修正の検出中にエラーが発生: {e}")
@@ -249,9 +253,7 @@ class NikkeiScraper:
                     
                     # 取引開始時に初回読み込みを実行
                     logger.info("取引開始時刻になりました。初回読み込みを実行します。")
-                    self.is_initial_load = True
                     self.detect_upward_revisions()
-                    self.is_initial_load = False
                     logger.info("初回読み込み完了。新しい上方修正のニュースを監視開始します。")
                     continue
 
@@ -361,9 +363,6 @@ if __name__ == "__main__":
             scraper_upward.handle_detected_revision(revision)
     else:
         logger.info("初回読み込みでは上方修正は検出されませんでした")
-
-    # is_initial_loadをFalseに設定
-    scraper_upward.is_initial_load = False
     
     # 2回目の読み込み（is_initial_load = False）
     logger.info("\n2回目の読み込みを実行します...")
