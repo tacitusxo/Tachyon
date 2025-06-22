@@ -103,13 +103,18 @@ class NikkeiScraper:
 
         return None
 
-    def is_upward_revision(self, text: str) -> bool:
+    def is_upward_revision(self, text: str) -> tuple[bool, str]:
         """上方修正かどうかを判定する"""
         upward_keywords = [
             "上方修正",
+            "増配",
+            "過去最高",
         ]
 
-        return any(keyword in text for keyword in upward_keywords)
+        for keyword in upward_keywords:
+            if keyword in text:
+                return True, keyword
+        return False, ""
 
     def detect_upward_revisions(self, url: Optional[str] = None) -> List[Dict]:
         """上方修正のニュースを検出する"""
@@ -146,10 +151,12 @@ class NikkeiScraper:
                     continue
 
                 # 上方修正かチェック
-                if self.is_upward_revision(announcement["title"]):
+                is_upward, matched_keyword = self.is_upward_revision(announcement["title"])
+                if is_upward:
+                    announcement["matched_keyword"] = matched_keyword
                     upward_revisions.append(announcement)
                     logger.info(
-                        f"上方修正を検出: {announcement['company_name']} ({announcement['symbol']}) - {announcement['title'][:50]}..."
+                        f"上方修正を検出（キーワード: {matched_keyword}）: {announcement['company_name']} ({announcement['symbol']}) - {announcement['title'][:50]}..."
                     )
                 else:
                     logger.info(
@@ -346,6 +353,7 @@ class NikkeiScraper:
         logger.info(f"会社名: {company_name}")
         logger.info(f"タイトル: {revision.get('title')}")
         logger.info(f"時刻: {revision.get('time')}")
+        logger.info(f"マッチしたキーワード: {revision.get('matched_keyword', 'N/A')}")
 
         # Slackに通知を送信
         self.send_slack_notification(revision)
