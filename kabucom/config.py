@@ -36,7 +36,6 @@ def load_environment_variables():
         logger.error("Error: KABUCOM_ACCOUNT_TYPE environment variable is not set")
         exit(1)
 
-    logger.info(f"APIパスワード: {api_password}")
     logger.info(f"利用可能な余力: {available_margin:,.0f}円")
     logger.info(f"口座種別: {account_type}")
     logger.info(f"監視間隔: {interval_seconds}秒")

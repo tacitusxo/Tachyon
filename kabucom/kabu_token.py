@@ -37,9 +37,8 @@ def get_token(api_password: str) -> str:
             if not token:
                 logger.error("トークンの取得に失敗しました")
                 exit(1)
-                
+
             logger.info("トークンの発行に成功しました")
-            logger.info(token)
             return token
             
     except urllib.error.HTTPError as e:
