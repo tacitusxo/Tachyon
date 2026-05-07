@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:r.nikkei.com)",
+      "Bash(pip-compile:*)",
+      "Bash(pip install:*)",
+      "Bash(python3 -m pip install:*)",
+      "Bash(find:*)"
+    ],
+    "deny": []
+  }
+}
