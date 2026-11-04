@@ -77,7 +77,9 @@ def run(data_dir: str, strategies: str = "123", start=None, end=None, overrides=
         runs.append(("1", backtest_upward_revision(ds, days, params), 1))
     if "2" in strategies:
         print(f"② 利確 +{sq.take_profit_ticks}ティック / 損切り -{sq.stop_loss_ticks}ティック / "
-              f"上位 {sq.ranking_top_n} 銘柄 / 予算 {sq.budget_per_trade:,.0f}円")
+              f"上位 {sq.ranking_top_n} 銘柄 / 予算 {sq.budget_per_trade:,.0f}円 / "
+              f"ストップ高までの余地 {sq.min_room_pct}% 以上"
+              + (f" / 前日比 +{sq.max_gap_pct}% 以下" if sq.max_gap_pct > 0 else ""))
         runs.append(("2", backtest_special_quote(ds, days, params, sq), sq.max_positions))
     if "3" in strategies:
         print(f"③ 押し目 {shr.min_dip_pct}〜{shr.max_dip_pct}% / 反発 {shr.rebound_ticks}ティック / "

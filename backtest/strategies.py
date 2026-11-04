@@ -126,8 +126,11 @@ def backtest_special_quote(ds: CsvDataSource, days: List[date], p: BacktestParam
     - 「前日終値より高く、かつ 9:00 から sq_min_open_delay_min 分以上遅れて寄った銘柄」を
       寄り前に特別買い気配だった銘柄とみなす
     - ライブはランキング上位 SQ_RANKING_TOP_N 銘柄だけを見るので、前日比の上昇率で上位 N 銘柄に絞る
-    - 寄り付き（始値）で全量約定したと仮定する（実際は時間優先で約定しないことが多い）
-    - 気配の切り上げへの追随上限（SQ_MAX_CHASE_PCT / SQ_MAX_REORDERS）は気配データが無いため再現しない
+    - 寄り付き（始値）で全量約定したと仮定する（ライブの上値指値モード SQ_ENTRY_MODE=cap に近い。
+      追随モード chase では時間優先で約定しないことが多いので、さらに楽観的になる）
+    - 伸びる余地の判定（SQ_MIN_ROOM_PCT / SQ_MAX_GAP_PCT）は、検知時の気配の代わりに始値で行う。
+      始値は検知時の気配以上なので、ライブより厳しめ（見送りが多め）になる
+    - 上値指値の上限（SQ_MAX_CHASE_PCT）・追随回数（SQ_MAX_REORDERS）は気配データが無いため再現しない
     - 決済はライブと同じ: 約定単価 + 利確ティックの指値、- 損切りティックで成行、強制決済
     """
     trades = []
@@ -138,6 +141,11 @@ def backtest_special_quote(ds: CsvDataSource, days: List[date], p: BacktestParam
             base = prev.get(code)
             if base and bar.open > base.close:
                 if bar.open < sq.min_price or (sq.max_price and bar.open > sq.max_price):
+                    continue
+                if sq.max_gap_pct > 0 and (bar.open / base.close - 1) * 100 > sq.max_gap_pct:
+                    continue
+                if sq.min_room_pct > 0 and \
+                        (upper_limit(base.close) / bar.open - 1) * 100 < sq.min_room_pct:
                     continue
                 gaps.append((bar.open / base.close - 1, code))
         gaps.sort(reverse=True)

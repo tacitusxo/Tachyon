@@ -9,7 +9,7 @@ from special_quote import (  # noqa: E402
     SIGN_SPECIAL_QUOTE, OrderStatus, PaperBroker, Phase, SpecialQuoteConfig,
     SpecialQuoteEngine, SpecialQuoteTrade,
 )
-from tick_size import add_ticks, tick_size  # noqa: E402
+from tick_size import add_ticks, round_down_to_tick, tick_size  # noqa: E402
 
 
 class TickSizeTest(unittest.TestCase):
@@ -29,25 +29,34 @@ class TickSizeTest(unittest.TestCase):
         self.assertEqual(add_ticks(1500, 2, "10003"), 1501)
         self.assertEqual(add_ticks(999.9, 2, "10003"), 1000.5)
 
+    def test_round_down(self):
+        self.assertEqual(round_down_to_tick(1050.7), 1050)
+        self.assertEqual(round_down_to_tick(3009.9), 3005)
+        self.assertEqual(round_down_to_tick(999.95, "10003"), 999.9)
 
-def board(price, ask, special=True):
-    return {
+
+def board(price, ask, special=True, prev_close=None):
+    b = {
         "CurrentPrice": price,
         "AskPrice": ask,
         "AskSign": SIGN_SPECIAL_QUOTE if special else "0101",
     }
+    if prev_close is not None:
+        b["PreviousClose"] = prev_close
+    return b
 
 
 class FakeApi:
     def __init__(self):
         self.boards = {}
         self.ranking = []
+        self.upper_limit = 1500
 
     def get_board(self, symbol):
         return self.boards.get(symbol)
 
     def get_symbol(self, symbol):
-        return {"PriceRangeGroup": "10000"}
+        return {"PriceRangeGroup": "10000", "UpperLimit": self.upper_limit}
 
     def get_ranking(self, exchange):
         return self.ranking
@@ -66,7 +75,8 @@ class Clock:
 
 def make_config(**kwargs):
     defaults = dict(api_password="x", account_type=4, budget_per_trade=1_000_000,
-                    scan_interval_sec=0, take_profit_ticks=2, stop_loss_ticks=3)
+                    scan_interval_sec=0, take_profit_ticks=2, stop_loss_ticks=3,
+                    entry_mode="chase")
     defaults.update(kwargs)
     return SpecialQuoteConfig(**defaults)
 
@@ -184,6 +194,97 @@ class EngineScenarioTest(unittest.TestCase):
         self.clock.now = datetime(2026, 11, 7, 10, 0)  # 土曜日
         e.tick()
         self.assertEqual(e.active, {})
+
+
+class CapModeTest(unittest.TestCase):
+    """上値指値（cap）モードと、伸びる余地による見送り"""
+
+    def setUp(self):
+        self.api = FakeApi()
+        self.broker = PaperBroker()
+        self.clock = Clock(datetime(2026, 11, 4, 9, 5))
+        self.api.ranking = [{"Symbol": "1234", "SymbolName": "テスト"}]
+        self.api.boards["1234"] = board(900, 1000, prev_close=900)
+
+    def engine(self, **kwargs):
+        kwargs.setdefault("entry_mode", "cap")
+        return SpecialQuoteEngine(self.api, self.broker, make_config(**kwargs), self.clock)
+
+    def test_places_cap_limit_and_fills_at_open_price(self):
+        e = self.engine(max_chase_pct=5)
+        e.tick()
+        t = e.active["1234"]
+        self.assertEqual(t.initial_price, 1000)
+        self.assertEqual(t.buy_price, 1050)       # 1000 × 1.05
+        self.assertEqual(t.qty, 800)              # 90万円 / 指値 1050円 を100株単位で切り捨て
+
+        # 気配が切り上がっても指値以下なら出し直さない
+        self.api.boards["1234"] = board(900, 1030)
+        e.tick()
+        self.assertIsNone(t.pending_cancel)
+        self.assertEqual(t.reorder_count, 0)
+
+        # 1030 で寄り付き → 指値ではなく寄り値で約定
+        self.api.boards["1234"] = board(1030, 1031, special=False)
+        e.tick()
+        self.assertEqual(t.phase, Phase.HOLDING)
+        self.assertEqual(t.avg_price, 1030)
+        self.assertEqual(t.tp_price, 1032)
+
+    def test_cap_is_limited_to_upper_limit(self):
+        self.api.upper_limit = 1100
+        e = self.engine(max_chase_pct=20, min_room_pct=5)
+        e.tick()
+        self.assertEqual(e.active["1234"].buy_price, 1100)
+
+    def test_aborts_when_quote_exceeds_cap(self):
+        e = self.engine(max_chase_pct=5)
+        e.tick()
+        t = e.active["1234"]
+        self.api.boards["1234"] = board(900, 1060)
+        e.tick()
+        self.assertEqual(t.pending_cancel, "abort")
+        e.tick()
+        self.assertEqual(t.phase, Phase.DONE)
+        self.assertEqual(t.filled_qty, 0)
+
+    def test_skips_when_little_room_to_limit_up(self):
+        self.api.upper_limit = 1040     # 余地 4%
+        e = self.engine(min_room_pct=5)
+        e.tick()
+        self.assertEqual(e.active, {})
+        self.assertIn("1234", e.skipped_today)
+
+        # 同日は再判定しない（get_symbol を呼ばない）
+        self.api.upper_limit = 1500
+        e.tick()
+        self.assertEqual(e.active, {})
+
+        # 翌営業日は再判定する
+        self.clock.now = datetime(2026, 11, 5, 9, 5)
+        e.tick()
+        self.assertIn("1234", e.active)
+
+    def test_skips_when_upper_limit_unknown(self):
+        self.api.upper_limit = None
+        e = self.engine(min_room_pct=5)
+        e.tick()
+        self.assertEqual(e.active, {})
+
+    def test_room_check_can_be_disabled(self):
+        self.api.upper_limit = None
+        e = self.engine(min_room_pct=0)
+        e.tick()
+        self.assertEqual(e.active["1234"].buy_price, 1050)
+
+    def test_skips_large_gap(self):
+        e = self.engine(max_gap_pct=10)   # 900 → 1000 は +11.1%
+        e.tick()
+        self.assertEqual(e.active, {})
+        e2 = SpecialQuoteEngine(self.api, PaperBroker(),
+                                make_config(entry_mode="cap", max_gap_pct=12), self.clock)
+        e2.tick()
+        self.assertIn("1234", e2.active)
 
 
 class PartialFillTest(unittest.TestCase):

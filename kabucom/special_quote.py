@@ -3,9 +3,13 @@
 
 概要:
   1. 値上がり率ランキングの上位銘柄から「特別買い気配」（AskSign == "0102"）の銘柄を探す
-  2. 気配が切り上がる前に、現在の特別気配値で指値買いを出す
-  3. 特別気配のまま気配値が切り上がったら、買い注文を取消して新しい気配値で出し直す
-     （kabu API には株式の訂正注文がないため「取消 → 再発注」で訂正する）
+     - ストップ高（UpperLimit）までの余地が SQ_MIN_ROOM_PCT % 未満の銘柄は、伸びる余地が
+       少ない（出遅れ）とみなして見送る。前日比が SQ_MAX_GAP_PCT % を超える銘柄も見送る
+  2. 買い注文の出し方は SQ_ENTRY_MODE で選ぶ
+     - cap（既定）: 「気配 × (1 + SQ_MAX_CHASE_PCT%)」（ストップ高が上限）の上値指値を1回だけ出す。
+       寄り付き（板寄せ）の約定値段は全員共通なので、寄り値が指値以下なら寄り値で優先的に約定する
+     - chase: 現在の特別気配値で指値買いし、気配が切り上がったら取消して出し直す
+       （kabu API には株式の訂正注文がないため「取消 → 再発注」で訂正する）
   4. 約定したら「約定単価 + 利確ティック」で指値売りを出す
   5. 現在値が「約定単価 - 損切りティック」以下になったら、利確注文を取消して成行で売る
      （kabu API は OCO 注文に対応していないため、損切りはプログラム側で監視する）
@@ -36,7 +40,7 @@ from typing import Callable, Dict, List, Optional, Set
 import jpholiday
 from dotenv import load_dotenv
 
-from tick_size import add_ticks
+from tick_size import add_ticks, round_down_to_tick
 from utils import calculate_purchase_quantity
 
 logging.basicConfig(
@@ -68,6 +72,13 @@ def _env_time(name: str, default: str) -> dt_time:
     return dt_time(int(hour), int(minute))
 
 
+def _entry_mode(value: str) -> str:
+    mode = value.strip().lower()
+    if mode not in ("cap", "chase"):
+        raise SystemExit(f"Error: SQ_ENTRY_MODE は cap か chase を指定してください（{value}）")
+    return mode
+
+
 @dataclass
 class SpecialQuoteConfig:
     api_password: str
@@ -83,7 +94,10 @@ class SpecialQuoteConfig:
     take_profit_ticks: int = 2        # 利確ティック数
     stop_loss_ticks: int = 3          # 損切りティック数
     max_reorders: int = 5             # 切り上げに追随して出し直す最大回数
-    max_chase_pct: float = 5.0        # 初回発注価格から何%上まで追随するか
+    max_chase_pct: float = 5.0        # 検知した気配から何%上まで買うか（cap: 指値 / chase: 追随上限）
+    entry_mode: str = "cap"           # cap: 上値指値を1回 / chase: 気配に追随して出し直す
+    min_room_pct: float = 5.0         # ストップ高までの余地がこれ未満なら見送る（0 = 判定しない）
+    max_gap_pct: float = 0.0          # 前日比がこれを超えたら見送る（0 = 判定しない）
     fill_wait_after_open_sec: float = 10.0  # 特気解消後、未約定なら何秒で取消すか
     max_positions: int = 1            # 同時に扱う銘柄数
     entry_end: dt_time = dt_time(15, 0)     # 新規エントリーの締切
@@ -120,6 +134,9 @@ class SpecialQuoteConfig:
             stop_loss_ticks=int(os.getenv("SQ_STOP_LOSS_TICKS", "3")),
             max_reorders=int(os.getenv("SQ_MAX_REORDERS", "5")),
             max_chase_pct=float(os.getenv("SQ_MAX_CHASE_PCT", "5")),
+            entry_mode=_entry_mode(os.getenv("SQ_ENTRY_MODE", "cap")),
+            min_room_pct=float(os.getenv("SQ_MIN_ROOM_PCT", "5")),
+            max_gap_pct=float(os.getenv("SQ_MAX_GAP_PCT", "0")),
             fill_wait_after_open_sec=float(os.getenv("SQ_FILL_WAIT_AFTER_OPEN_SEC", "10")),
             max_positions=int(os.getenv("SQ_MAX_POSITIONS", "1")),
             entry_end=_env_time("SQ_ENTRY_END", "15:00"),
@@ -275,7 +292,7 @@ class _PaperOrder:
 class PaperBroker:
     """
     発注せずに板情報から約定を模擬するブローカー。
-      - 指値買い: 特別気配が解消し、現在値が指値以下になったら指値で約定
+      - 指値買い: 特別気配が解消し、現在値が指値以下になったら現在値（≒寄り値）で約定
       - 指値売り: 現在値が指値以上になったら指値で約定
       - 成行売り: 現在値で即約定
     実際より約定しやすい（楽観的な）想定なので、成績はあくまで参考値。
@@ -323,7 +340,7 @@ class PaperBroker:
                 continue
             fill_price = None
             if order.side == "buy" and not special and current <= order.price:
-                fill_price = order.price
+                fill_price = current
             elif order.side == "sell" and order.price is None:
                 fill_price = current
             elif order.side == "sell" and current >= order.price:
@@ -377,9 +394,10 @@ class SpecialQuoteTrade:
 
     # --- エントリー ---------------------------------------------------------
 
-    def start(self, quote_price: float) -> bool:
+    def start(self, quote_price: float, limit_price: Optional[float] = None) -> bool:
+        """quote_price: 検知した特別気配値 / limit_price: 指値（省略時は気配値）"""
         self.initial_price = quote_price
-        return self._place_buy(quote_price)
+        return self._place_buy(limit_price or quote_price)
 
     def _place_buy(self, price: float) -> bool:
         order_id = self.broker.buy_limit(self.symbol, self.qty, price)
@@ -387,7 +405,10 @@ class SpecialQuoteTrade:
             self.phase = Phase.DONE
             return False
         self.buy_order_id, self.buy_price = order_id, price
-        self._info(f"特別買い気配 {price} で指値買い {self.qty}株")
+        if price > self.initial_price:
+            self._info(f"特別買い気配 {self.initial_price} に対して上値指値 {price} で買い {self.qty}株")
+        else:
+            self._info(f"特別買い気配 {price} で指値買い {self.qty}株")
         return True
 
     # --- 1ステップ ----------------------------------------------------------
@@ -442,7 +463,11 @@ class SpecialQuoteTrade:
             return
         self.quote_ended_at = None
 
-        if quote and quote > self.buy_price:
+        if quote and quote > self.buy_price and self.config.entry_mode == "cap":
+            # 気配が上値指値を超えた → 寄り値も指値を上回るので約定の見込みがない
+            self._info(f"気配 {quote} が上値指値 {self.buy_price} を超えたため見送ります")
+            self._cancel_buy("abort")
+        elif quote and quote > self.buy_price:
             limit = self.initial_price * (1 + self.config.max_chase_pct / 100)
             if self.reorder_count >= self.config.max_reorders or quote > limit:
                 self._info(f"気配 {quote} が追随上限を超えたため見送ります")
@@ -563,13 +588,14 @@ class SpecialQuoteEngine:
         self.clock = clock
         self.active: Dict[str, SpecialQuoteTrade] = {}
         self.traded_today: Set[str] = set()   # 現物の差金決済を避けるため同日同銘柄は1回まで
+        self.skipped_today: Set[str] = set()  # 伸びる余地が無いなどで見送った銘柄（当日は再判定しない）
         self._trade_date = None
         self._last_scan: Optional[datetime] = None
 
     def tick(self):
         now = self.clock()
         if self._trade_date != now.date():
-            self._trade_date, self.traded_today = now.date(), set()
+            self._trade_date, self.traded_today, self.skipped_today = now.date(), set(), set()
 
         for symbol, trade in list(self.active.items()):
             board = self.api.get_board(symbol)
@@ -594,7 +620,7 @@ class SpecialQuoteEngine:
             if len(self.active) >= self.config.max_positions:
                 return
             symbol = str(item.get("Symbol"))
-            if symbol in self.traded_today or symbol in self.active:
+            if symbol in self.traded_today or symbol in self.skipped_today or symbol in self.active:
                 continue
             board = self.api.get_board(symbol)
             if not board or board.get("AskSign") != SIGN_SPECIAL_QUOTE:
@@ -604,25 +630,59 @@ class SpecialQuoteEngine:
                 continue
             if quote < self.config.min_price or (self.config.max_price and quote > self.config.max_price):
                 continue
-            self._enter(symbol, item.get("SymbolName", ""), quote, now)
+            self._enter(symbol, item.get("SymbolName", ""), quote, board, now)
 
-    def _enter(self, symbol: str, name: str, quote: float, now: datetime):
+    def _skip(self, symbol: str, reason: str):
+        logger.info(f"[{symbol}] {reason}のため見送ります")
+        self.skipped_today.add(symbol)
+
+    def _enter(self, symbol: str, name: str, quote: float, board: dict, now: datetime):
         info = self.api.get_symbol(symbol) or {}
-        qty = calculate_purchase_quantity(quote, self.config.budget_per_trade)
+        group = info.get("PriceRangeGroup")
+        upper = info.get("UpperLimit")
+        prev_close = board.get("PreviousClose")
+
+        # 伸びる余地の判定
+        if self.config.max_gap_pct > 0 and prev_close:
+            gap = (quote / prev_close - 1) * 100
+            if gap > self.config.max_gap_pct:
+                return self._skip(symbol, f"前日比 +{gap:.1f}% が上限 {self.config.max_gap_pct}% を超えている")
+        if self.config.min_room_pct > 0:
+            if not upper:
+                return self._skip(symbol, "値幅上限（UpperLimit）が取得できず伸びる余地を判定できない")
+            room = (upper / quote - 1) * 100
+            if room < self.config.min_room_pct:
+                return self._skip(symbol, f"ストップ高 {upper} までの余地 {room:.1f}% が "
+                                          f"{self.config.min_room_pct}% 未満")
+
+        limit = quote
+        if self.config.entry_mode == "cap":
+            limit = round_down_to_tick(quote * (1 + self.config.max_chase_pct / 100), group)
+            if upper:
+                limit = min(limit, upper)
+            limit = max(limit, quote)
+
+        # 最悪は指値で約定するので、指値で株数を計算する
+        qty = calculate_purchase_quantity(limit, self.config.budget_per_trade)
         if qty <= 0:
-            logger.info(f"[{symbol}] 予算内で購入できないためスキップ（気配 {quote}）")
+            logger.info(f"[{symbol}] 予算内で購入できないためスキップ（指値 {limit}）")
             return
         trade = SpecialQuoteTrade(
-            symbol=symbol, name=name, price_range_group=info.get("PriceRangeGroup"),
+            symbol=symbol, name=name, price_range_group=group,
             qty=qty, broker=self.broker, config=self.config,
         )
         self.traded_today.add(symbol)
-        if trade.start(quote):
+        if trade.start(quote, limit):
             self.active[symbol] = trade
 
     def run_forever(self):
         mode = "ペーパートレード（発注しません）" if self.config.dry_run else "実発注"
-        logger.info(f"特別買い気配スキャルピングを開始します（{mode}）")
+        c = self.config
+        entry = (f"上値指値（気配 +{c.max_chase_pct}%）" if c.entry_mode == "cap"
+                 else f"追随（最大 {c.max_reorders} 回 / +{c.max_chase_pct}%）")
+        logger.info(f"特別買い気配スキャルピングを開始します（{mode}）"
+                    f" 買い方: {entry} / ストップ高までの余地 {c.min_room_pct}% 以上"
+                    + (f" / 前日比 +{c.max_gap_pct}% 以下" if c.max_gap_pct > 0 else ""))
         while True:
             try:
                 now = self.clock()
