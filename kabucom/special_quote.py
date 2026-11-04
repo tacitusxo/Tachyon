@@ -193,8 +193,9 @@ class KabuApi:
     def get_symbol(self, symbol: str) -> Optional[dict]:
         return self.request("GET", f"/symbol/{symbol}@1")
 
-    def get_ranking(self, exchange: str) -> List[dict]:
-        content = self.request("GET", "/ranking", {"type": 1, "ExchangeDivision": exchange})
+    def get_ranking(self, exchange: str, ranking_type: int = 1) -> List[dict]:
+        """ranking_type: 1=値上がり率 2=値下がり率 6=売買高急増 7=売買代金急増 など"""
+        content = self.request("GET", "/ranking", {"type": ranking_type, "ExchangeDivision": exchange})
         if not content:
             return []
         return content.get("Ranking") or []

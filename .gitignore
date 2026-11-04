@@ -44,3 +44,9 @@ kabucom/stop_high_list.json
 # バックテストのデータと結果
 data/
 backtest_result/
+
+# 新しい戦略の状態ファイル（ポジション・終値の履歴・開示）と銘柄リスト
+kabucom/state/
+kabucom/disclosures_csv/
+kabucom/topix_transition_list.csv
+kabucom/reversal_universe.csv

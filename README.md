@@ -44,7 +44,15 @@
    - デフォルトはペーパートレード（実発注しない）
    - 詳細は「[前日ストップ高銘柄の押し目買い](#前日ストップ高銘柄の押し目買いstop_high_reboundpy)」を参照
 
-6. バックテスト（`backtest/`）
+6. 新しい戦略 A〜D・予備（それぞれ独立して起動。既定はペーパートレード）
+   - A: TOPIX 段階的ウエイト低減の売られすぎの戻り（`topix_rebalance.py`）
+   - B: 適時開示の採点 → 翌日・後場に買う（`disclosure_score.py`、Claude による採点は任意）
+   - C: 材料なしで下がった銘柄の短期の戻り（`no_news_reversal.py`）
+   - D: 引け前のモメンタム、日経225 先物（`futures_close_momentum.py`）
+   - 予備: 注目銘柄のオープニングレンジブレイク（`orb.py`）
+   - 詳細は [新しい戦略](docs/新戦略.md) を参照
+
+7. バックテスト（`backtest/`）
    - 3 ロジックを過去データ（日足・分足・開示）で検証。ライブと同じパラメータ・判定ロジックを使う
    - 詳細は「[バックテスト](#バックテストbacktest)」を参照
 
@@ -86,9 +94,14 @@ cd kabucom
 python main.py            # 上方修正監視・自動売買
 python special_quote.py   # 特別買い気配スキャルピング
 python stop_high_rebound.py   # 前日ストップ高銘柄の押し目買い
+python topix_rebalance.py     # A. TOPIX 段階的ウエイト低減の戻り
+python disclosure_score.py    # B. 適時開示の採点
+python no_news_reversal.py    # C. 材料なしで下がった銘柄の戻り
+python futures_close_momentum.py   # D. 引け前のモメンタム（先物）
+python orb.py                 # 予備. オープニングレンジブレイク
 ```
 
-Windows では `run.bat` / `run_special_quote.bat` / `run_stop_high_rebound.bat` でも起動できます。
+Windows では `run.bat` / `run_special_quote.bat` / `run_stop_high_rebound.bat`、新しい戦略は `run_<ファイル名>.bat` でも起動できます。新しい戦略の設定は [新しい戦略](docs/新戦略.md) を参照してください。
 
 ## 特別買い気配スキャルピング（`special_quote.py`）
 
