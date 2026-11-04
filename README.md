@@ -27,6 +27,13 @@
    - 利用可能な余力の 90%までを使用する制限
    - エラーハンドリングとログ記録
 
+4. 特別買い気配スキャルピング（`special_quote.py`、上方修正監視とは独立して起動）
+   - 値上がり率ランキングから特別買い気配の銘柄を検出し、気配値で指値買い
+   - 気配の切り上げに追随して取消→再発注
+   - 約定後はティック指定で利確（指値）・損切り（成行）、引け前に強制決済
+   - デフォルトはペーパートレード（実発注しない）
+   - 詳細は「[特別買い気配スキャルピング](#特別買い気配スキャルピングspecial_quotepy)」を参照
+
 ## 環境構築
 
 1. Python 3.8 以上がインストールされていること
@@ -52,6 +59,8 @@ KABUCOM_ACCOUNT_TYPE=12  # kabu.comの口座種別（2:一般口座、4:特定�
 MONITORING_INTERVAL_SECONDS=1  # 監視間隔（秒、推奨値：1）
 ```
 
+特別買い気配スキャルピング用の設定（`SQ_*`）は「[特別買い気配スキャルピング](#特別買い気配スキャルピングspecial_quotepy)」を参照してください。
+
 ## 使用方法
 
 1. kabu.com の API サービスを起動
@@ -59,8 +68,11 @@ MONITORING_INTERVAL_SECONDS=1  # 監視間隔（秒、推奨値：1）
 
 ```bash
 cd kabucom
-python main.py
+python main.py            # 上方修正監視・自動売買
+python special_quote.py   # 特別買い気配スキャルピング
 ```
+
+Windows では `run.bat` / `run_special_quote.bat` でも起動できます。
 
 ## 特別買い気配スキャルピング（`special_quote.py`）
 
