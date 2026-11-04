@@ -7,7 +7,7 @@ kabu API の銘柄情報（/symbol）の PriceRangeGroup で呼値テーブル�
 """
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal
 from typing import List, Optional, Tuple
 
 # (価格の上限（以下）, 呼値) のリスト。最後の要素は上限なし。
@@ -80,3 +80,10 @@ def add_ticks(price: float, ticks: int, price_range_group: Optional[str] = None)
         else:
             p -= _tick_down(p, table)
     return float(p)
+
+
+def round_up_to_tick(price: float, price_range_group: Optional[str] = None) -> float:
+    """price 以上で最も近い呼値の価格を返す"""
+    p = Decimal(str(price))
+    tick = _tick_down(p, _table(price_range_group))
+    return float((p / tick).to_integral_value(rounding=ROUND_CEILING) * tick)

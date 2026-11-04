@@ -463,13 +463,19 @@ class SpecialQuoteTrade:
     def _on_bought(self, status: OrderStatus):
         self.filled_qty, self.avg_price = status.cum_qty, status.avg_price
         self.pending_cancel = None
-        self.tp_price = add_ticks(self.avg_price, self.config.take_profit_ticks, self.price_range_group)
-        self.sl_price = add_ticks(self.avg_price, -self.config.stop_loss_ticks, self.price_range_group)
+        self.tp_price, self.sl_price = self._exit_targets()
         self._info(f"約定 {self.filled_qty}株 @ {self.avg_price}  利確 {self.tp_price} / 損切り {self.sl_price}")
         self.tp_order_id = self.broker.sell_limit(self.symbol, self.filled_qty, self.tp_price)
         self.phase = Phase.HOLDING
         if not self.tp_order_id:
             self._start_market_exit("利確注文の発注失敗")
+
+    def _exit_targets(self):
+        """(利確価格, 損切り価格) を返す。派生戦略で上書きする"""
+        return (
+            add_ticks(self.avg_price, self.config.take_profit_ticks, self.price_range_group),
+            add_ticks(self.avg_price, -self.config.stop_loss_ticks, self.price_range_group),
+        )
 
     # --- 保有中 -------------------------------------------------------------
 
@@ -532,8 +538,14 @@ class SpecialQuoteTrade:
 # エンジン
 # ---------------------------------------------------------------------------
 
-def is_market_day(now: datetime) -> bool:
-    return now.weekday() < 5 and not jpholiday.is_holiday(now.date())
+# 東証の年末年始休業（土日祝以外で休場になる日）
+_EXCHANGE_HOLIDAYS = {(12, 31), (1, 2), (1, 3)}
+
+
+def is_market_day(now) -> bool:
+    d = now.date() if isinstance(now, datetime) else now
+    return (d.weekday() < 5 and not jpholiday.is_holiday(d)
+            and (d.month, d.day) not in _EXCHANGE_HOLIDAYS)
 
 
 def in_session(now: datetime) -> bool:

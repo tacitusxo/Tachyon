@@ -34,6 +34,13 @@
    - デフォルトはペーパートレード（実発注しない）
    - 詳細は「[特別買い気配スキャルピング](#特別買い気配スキャルピングspecial_quotepy)」を参照
 
+5. 前日ストップ高銘柄の押し目買い（`stop_high_rebound.py`、独立して起動）
+   - 引け後にストップ高で引けた銘柄を自動収集し、翌日の寄り後に監視
+   - 寄り後に一定%下落 → 安値から数ティック反発したところで指値買い
+   - 約定後は % 指定で利確（指値）・損切り（成行）、強制決済時刻あり
+   - デフォルトはペーパートレード（実発注しない）
+   - 詳細は「[前日ストップ高銘柄の押し目買い](#前日ストップ高銘柄の押し目買いstop_high_reboundpy)」を参照
+
 ## 環境構築
 
 1. Python 3.8 以上がインストールされていること
@@ -59,7 +66,7 @@ KABUCOM_ACCOUNT_TYPE=12  # kabu.comの口座種別（2:一般口座、4:特定�
 MONITORING_INTERVAL_SECONDS=1  # 監視間隔（秒、推奨値：1）
 ```
 
-特別買い気配スキャルピング用の設定（`SQ_*`）は「[特別買い気配スキャルピング](#特別買い気配スキャルピングspecial_quotepy)」を参照してください。
+特別買い気配スキャルピング用の設定（`SQ_*`）は「[特別買い気配スキャルピング](#特別買い気配スキャルピングspecial_quotepy)」、前日ストップ高銘柄の押し目買い用の設定（`SHR_*`）は「[前日ストップ高銘柄の押し目買い](#前日ストップ高銘柄の押し目買いstop_high_reboundpy)」を参照してください。
 
 ## 使用方法
 
@@ -70,9 +77,10 @@ MONITORING_INTERVAL_SECONDS=1  # 監視間隔（秒、推奨値：1）
 cd kabucom
 python main.py            # 上方修正監視・自動売買
 python special_quote.py   # 特別買い気配スキャルピング
+python stop_high_rebound.py   # 前日ストップ高銘柄の押し目買い
 ```
 
-Windows では `run.bat` / `run_special_quote.bat` でも起動できます。
+Windows では `run.bat` / `run_special_quote.bat` / `run_stop_high_rebound.bat` でも起動できます。
 
 ## 特別買い気配スキャルピング（`special_quote.py`）
 
@@ -126,6 +134,65 @@ python special_quote.py
 - 特別気配中は売買が成立しないため、気配値の指値買いが約定するのは基本的に**寄り付いたとき**です。その時点で同じ値段の買い注文が大量にある場合は時間優先で後回しになり、約定しないことが多いです
 - 寄り付いた後に急落すると、損切りは成行のため滑る可能性があります。特別売り気配になると売りも成立しません
 - テストは `python -m unittest discover tests` で実行できます
+
+## 前日ストップ高銘柄の押し目買い（`stop_high_rebound.py`）
+
+前日にストップ高で引けた銘柄は、翌日の寄り付き後にいったん売られやすい、という傾向を狙う戦略です。他の機能とは独立して動きます。
+
+### ロジック
+
+1. **前日の引け後（`SHR_COLLECT_AT`、デフォルト 15:35）**: 値上がり率ランキングの銘柄のうち、終値が銘柄情報の値幅上限（`UpperLimit`）に達している銘柄を `kabucom/stop_high_list.json` に保存する
+2. **当日の寄り後（`SHR_ENTRY_START`〜`SHR_ENTRY_END`）**: 保存した銘柄の板を監視する
+   - 基準値 = 前日終値と寄り後の高値の大きい方
+   - 基準値から **`SHR_MIN_DIP_PCT` % 以上下落**し、その安値から **`SHR_REBOUND_TICKS` ティック反発**したら、最良売気配で指値買い
+   - 下落が `SHR_MAX_DIP_PCT` % を超えた銘柄は見送る
+   - 寄らずに特別気配のままの銘柄（ストップ高張り付きなど）は対象外
+   - `SHR_FILL_WAIT_SEC` 秒で約定しなければ取消し、条件を満たせば再度狙う（`SHR_MAX_ENTRY_ATTEMPTS` 回まで）
+3. 約定したら **約定単価 × (1 + `SHR_TAKE_PROFIT_PCT` %)** を呼値に切り上げた価格で指値売り
+4. 現在値が **約定単価 × (1 − `SHR_STOP_LOSS_PCT` %)** 以下になったら、利確注文を取消して成行売り
+5. `SHR_FORCE_EXIT` の時刻になったら、保有分を成行で売る
+6. 同じ銘柄は 1 日 1 回まで（現物の差金決済対策）
+
+起動したままにしておけば、引け後の収集と翌朝の売買を毎日自動で繰り返します。前日の引け後に起動していなかった場合は、翌朝の寄り前に `python stop_high_rebound.py collect` を実行すれば前営業日分を収集できます（取引時間中は実行できません）。
+
+### 設定（`.env`）
+
+```
+SHR_DRY_RUN=true             # true: ペーパートレード（発注しない）。実発注は false
+SHR_BUDGET_PER_TRADE=300000  # 1トレードの予算（未設定なら AVAILABLE_MARGIN）。90%まで使用
+SHR_RANKING_EXCHANGE=T       # 収集に使うランキングの市場 ALL/T/TP/TS/TG
+SHR_COLLECT_AT=15:35         # 引け後の収集時刻
+SHR_LIST_FILE=               # 収集結果の保存先（未設定なら kabucom/stop_high_list.json）
+SHR_POLL_INTERVAL_SEC=1
+SHR_MIN_PRICE=0
+SHR_MAX_PRICE=0              # 0 = 上限なし
+SHR_MIN_DIP_PCT=3            # 基準値から何%下げたら押し目とみなすか
+SHR_MAX_DIP_PCT=15           # これ以上下げた銘柄は見送り
+SHR_REBOUND_TICKS=3          # 安値から何ティック戻したら買うか
+SHR_TAKE_PROFIT_PCT=2
+SHR_STOP_LOSS_PCT=2
+SHR_FILL_WAIT_SEC=5
+SHR_MAX_ENTRY_ATTEMPTS=3
+SHR_MAX_POSITIONS=1
+SHR_ENTRY_START=9:00
+SHR_ENTRY_END=10:00
+SHR_FORCE_EXIT=15:20
+```
+
+### 起動
+
+```bash
+cd kabucom
+python stop_high_rebound.py           # 監視・売買（引け後の収集も自動）
+python stop_high_rebound.py collect   # ストップ高銘柄の収集だけを今すぐ実行
+```
+
+### 注意
+
+- ランキング API は上位 50 銘柄までしか返さないため、ストップ高銘柄がそれより多い日は取りこぼします
+- 収集は「終値 = 値幅上限」で判定するため、ザラ場でストップ高をつけて引けで崩れた銘柄は含みません。値幅制限が拡大された銘柄は銘柄情報の上限値で判定します
+- 寄り後の値動きは 1 秒ごとの現在値で追っているため、その間の瞬間的な高値・安値は拾えません
+- 損切りは成行のため、急落時は滑る可能性があります。ペーパートレードの約定は楽観的な想定です
 
 ## セキュリティに関する注意
 
