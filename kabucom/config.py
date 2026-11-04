@@ -7,6 +7,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def get_bool_env(name: str, default: bool) -> bool:
+    """true/false 系の環境変数を読む（1/true/yes/on を真とみなす）"""
+    value = os.getenv(name)
+    if value is None or value.strip() == "":
+        return default
+    return value.strip().lower() in ("1", "true", "yes", "on")
+
+
 def load_environment_variables():
     """環境変数を読み込む"""
     try:

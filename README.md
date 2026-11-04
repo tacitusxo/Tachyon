@@ -23,6 +23,7 @@
    - 上方修正された銘柄に対して自動的に買い注文を実行
    - 利用可能な余力に基づいて購入可能な株数を自動計算（最小単位：100 株）
    - 成行注文による即時取引
+   - デフォルトはペーパートレード（`UR_DRY_RUN=true`）。発注せず、買う想定の銘柄・株数・金額をログに出す。実発注は `UR_DRY_RUN=false`
    - 逆指値注文による利益確定（価格の 1.2 倍をトリガー価格として設定）
 
 3. リスク管理
@@ -66,6 +67,7 @@ SLACK_WEBHOOK_URL=https://hooks.slack.com/services/~~~~  # Slack通知用のWebh
 AVAILABLE_MARGIN=500000  # 利用可能な証拠金（円）
 KABUCOM_ACCOUNT_TYPE=12  # kabu.comの口座種別（2:一般口座、4:特定口座、12:法人口座）
 MONITORING_INTERVAL_SECONDS=1  # 監視間隔（秒、推奨値：1）
+UR_DRY_RUN=true  # 上方修正監視（main.py）を true: ペーパートレード（発注しない）/ false: 実発注
 ```
 
 特別買い気配スキャルピング用の設定（`SQ_*`）は「[特別買い気配スキャルピング](#特別買い気配スキャルピングspecial_quotepy)」、前日ストップ高銘柄の押し目買い用の設定（`SHR_*`）は「[前日ストップ高銘柄の押し目買い](#前日ストップ高銘柄の押し目買いstop_high_reboundpy)」を参照してください。
