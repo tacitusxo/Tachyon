@@ -40,3 +40,7 @@ ENV/
 Thumbs.db 
 # 前日ストップ高銘柄の収集結果
 kabucom/stop_high_list.json
+
+# バックテストのデータと結果
+data/
+backtest_result/
