@@ -62,6 +62,59 @@ cd kabucom
 python main.py
 ```
 
+## 特別買い気配スキャルピング（`special_quote.py`）
+
+上方修正監視（`main.py`）とは独立して動く戦略です。
+
+### ロジック
+
+1. 値上がり率ランキング上位 `SQ_RANKING_TOP_N` 銘柄の板を確認し、**特別買い気配**（`AskSign == "0102"`）の銘柄を探す
+2. 気配が切り上がる前に、**現在の特別気配値で指値買い**を出す
+3. 特別気配のまま気配が切り上がったら、買い注文を**取消して新しい気配値で出し直す**（kabu API に株式の訂正注文はないため取消→再発注）
+   - 出し直しは `SQ_MAX_REORDERS` 回まで、初回価格から `SQ_MAX_CHASE_PCT` % 上までで、超えたら見送り
+   - 特気が解消（寄り付き）して `SQ_FILL_WAIT_AFTER_OPEN_SEC` 秒たっても約定しなければ取消
+   - 一部約定した場合は残りを取消し、約定分だけで次に進む
+4. 約定したら **約定単価 + `SQ_TAKE_PROFIT_TICKS` ティック** で指値売り（呼値は TOPIX500 / それ以外を自動判別）
+5. 現在値が **約定単価 - `SQ_STOP_LOSS_TICKS` ティック** 以下になったら、利確注文を取消して成行売り（kabu API は OCO 非対応のため、プログラム側で監視）
+6. `SQ_FORCE_EXIT` の時刻になったら、保有分を成行で売る
+7. 現物の差金決済を避けるため、同じ銘柄は 1 日 1 回までしかエントリーしない
+
+### 設定（`.env`）
+
+```
+SQ_DRY_RUN=true              # true: ペーパートレード（発注しない）。実発注は false
+SQ_BUDGET_PER_TRADE=300000   # 1トレードの予算（未設定なら AVAILABLE_MARGIN）。90%まで使用
+SQ_RANKING_EXCHANGE=T        # ALL/T/TP/TS/TG
+SQ_RANKING_TOP_N=10
+SQ_SCAN_INTERVAL_SEC=5
+SQ_POLL_INTERVAL_SEC=1
+SQ_MIN_PRICE=0
+SQ_MAX_PRICE=0               # 0 = 上限なし
+SQ_TAKE_PROFIT_TICKS=2
+SQ_STOP_LOSS_TICKS=3
+SQ_MAX_REORDERS=5
+SQ_MAX_CHASE_PCT=5
+SQ_FILL_WAIT_AFTER_OPEN_SEC=10
+SQ_MAX_POSITIONS=1
+SQ_ENTRY_END=15:00
+SQ_FORCE_EXIT=15:20
+```
+
+### 起動
+
+```bash
+cd kabucom
+python special_quote.py
+```
+
+デフォルトは **ペーパートレード** です。板情報から約定を模擬してログに損益を出すので、まずこれで挙動を確認してください（模擬は実際より約定しやすい楽観的な想定です）。
+
+### 注意
+
+- 特別気配中は売買が成立しないため、気配値の指値買いが約定するのは基本的に**寄り付いたとき**です。その時点で同じ値段の買い注文が大量にある場合は時間優先で後回しになり、約定しないことが多いです
+- 寄り付いた後に急落すると、損切りは成行のため滑る可能性があります。特別売り気配になると売りも成立しません
+- テストは `python -m unittest discover tests` で実行できます
+
 ## セキュリティに関する注意
 
 - **環境変数の管理**: `.env` ファイルには API パスワードなどの機密情報が含まれます。絶対にリポジトリに含めないでください（.gitignore に登録済み）
