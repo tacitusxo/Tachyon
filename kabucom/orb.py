@@ -34,7 +34,7 @@ from dotenv import load_dotenv
 from special_quote import KabuApi, KabuBroker, PaperBroker, Phase, _env_bool, _env_time, in_session, is_market_day
 from stop_high_rebound import ReboundTrade
 from swing import is_special
-from tick_size import add_ticks, round_down_to_tick, round_up_to_tick
+from tick_size import add_ticks, round_up_to_tick
 from utils import calculate_purchase_quantity
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s",
@@ -117,7 +117,6 @@ class ORBTrade(ReboundTrade):
     """押し目買い（ReboundTrade）と同じ買い方・決済の流れで、利確・損切りだけレンジ基準にする"""
     stop_price: float = 0.0
     take_profit_r: float = 5.0
-    upper_limit: Optional[float] = None
 
     def start(self, price: float, now: datetime) -> bool:  # type: ignore[override]
         self.initial_price, self.ordered_at = price, now
@@ -133,10 +132,8 @@ class ORBTrade(ReboundTrade):
         sl = self.stop_price
         risk = max(self.avg_price - sl, 0)
         tp = round_up_to_tick(self.avg_price + risk * self.take_profit_r, self.price_range_group)
-        tp = max(tp, add_ticks(self.avg_price, 1, self.price_range_group))
-        if self.upper_limit:
-            tp = min(tp, round_down_to_tick(self.upper_limit, self.price_range_group))
-        return tp, sl
+        # ストップ高（upper_limit）での上限は SpecialQuoteTrade._on_bought で共通に当てる
+        return max(tp, add_ticks(self.avg_price, 1, self.price_range_group)), sl
 
 
 class ORBEngine:

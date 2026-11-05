@@ -17,7 +17,7 @@ from typing import List, Optional
 from dotenv import load_dotenv
 
 from price_limit import upper_limit
-from special_quote import SpecialQuoteConfig, SpecialQuoteTrade, _env_time
+from special_quote import SpecialQuoteConfig, SpecialQuoteTrade, _env_time, in_session
 from stop_high_rebound import DipWatcher, ReboundTrade, StopHighConfig
 from tick_size import add_ticks, round_up_to_tick
 
@@ -72,9 +72,8 @@ def load_params(overrides: Optional[dict] = None):
 
 
 def _in_scraper_session(t: datetime) -> bool:
-    """main.py（scraper.py）が開示を監視している時間: 9:00-11:30 / 12:30-15:00"""
-    x = t.time()
-    return dt_time(9, 0) <= x <= dt_time(11, 30) or dt_time(12, 30) <= x <= dt_time(15, 0)
+    """main.py（scraper.py）が開示を監視している時間: 9:00-11:30 / 12:30-15:30"""
+    return in_session(t)
 
 
 # ---------------------------------------------------------------------------
@@ -83,12 +82,15 @@ def _in_scraper_session(t: datetime) -> bool:
 
 def backtest_upward_revision(ds: CsvDataSource, days: List[date], p: BacktestParams) -> List[Trade]:
     """
-    - 対象: 取引時間中（9:00-11:30 / 12:30-15:00）に出た上方修正の開示
+    - 対象: 取引時間中（9:00-11:30 / 12:30-15:30）に出た上方修正の開示
       （ライブは取引時間外の開示を「処理済み」として読み飛ばすため、時間外の開示は対象外）
     - 買い: 開示から ur_detect_delay_min 分後の最初の分足の始値に、成行のスリッページを足した価格
-    - 売り: ライブには無いので、% 指定の利確（指値）・損切り（成行）。どちらも無ければ引けで売る
+    - 株数: ライブと同じく値幅上限（前日終値から計算）の値段で計算する（成行の余力拘束）
+    - 売り: % 指定の利確（指値）・損切り（成行）。どちらも無ければ引けで売る
+      （ライブは UR_TAKE_PROFIT_PCT の利確指値だけで、損切りはしない）
     """
     day_set = set(days)
+    prev_day = dict(zip(days[1:], days))
     trades = []
     for rev in ds.revisions():
         if not rev.upward or rev.disclosed_at.date() not in day_set or not _in_scraper_session(rev.disclosed_at):
@@ -108,8 +110,10 @@ def backtest_upward_revision(ds: CsvDataSource, days: List[date], p: BacktestPar
         exit_ = simulate_exit(path, tp, sl, p.ur_force_exit, p.slippage_ticks, group)
         if exit_ is None:  # 買った分足が引けの1本だけだった
             exit_ = Exit(bars[-1].time, bars[-1].close, "引け")
+        prev_bar = ds.daily(prev_day[day]).get(rev.code) if day in prev_day else None
+        sizing = upper_limit(prev_bar.close) if prev_bar else None
         trade = make_trade("①上方修正", rev.code, ds.name(rev.code), (bars[0].time, entry_price),
-                           p.ur_budget, exit_, p.fee_rate, note=rev.title)
+                           p.ur_budget, exit_, p.fee_rate, note=rev.title, sizing_price=sizing)
         if trade:
             trades.append(trade)
     return trades

@@ -4,11 +4,11 @@ import time
 import logging
 import os
 from datetime import datetime, time as dt_time, timedelta
-import jpholiday
 from bs4 import BeautifulSoup
-from typing import List, Dict, Optional
-from unittest.mock import patch, MagicMock
+from typing import Callable, List, Dict, Optional
 from dotenv import load_dotenv
+
+from special_quote import in_session, is_market_day
 
 logging.basicConfig(
     level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -103,7 +103,12 @@ class NikkeiScraper:
 
         return None
 
-    def is_upward_revision(self, text: str) -> tuple[bool, str]:
+    # タイトルにこれらを含む開示は好材料とみなさない
+    #   - 下方修正・減配: 「上期上方修正・通期下方修正」のような混在は悪材料のことが多い
+    #   - 訂正: 過去の開示の訂正で、新しい情報ではない
+    EXCLUDE_KEYWORDS = ("下方修正", "減配", "訂正")
+
+    def is_upward_revision(self, text: Optional[str]) -> tuple[bool, str]:
         """上方修正かどうかを判定する"""
         upward_keywords = [
             "上方修正",
@@ -111,16 +116,22 @@ class NikkeiScraper:
             "過去最高",
         ]
 
+        if not text or any(k in text for k in self.EXCLUDE_KEYWORDS):
+            return False, ""
         for keyword in upward_keywords:
             if keyword in text:
                 return True, keyword
         return False, ""
 
+    @staticmethod
+    def _announcement_id(announcement: Dict) -> str:
+        return f"{announcement.get('symbol') or ''}-{(announcement.get('title') or '')[:50]}"
+
     def detect_upward_revisions(self, url: Optional[str] = None) -> List[Dict]:
         """上方修正のニュースを検出する"""
+        original_url = self.base_url
         try:
             # URLが指定された場合は一時的にbase_urlを変更
-            original_url = self.base_url
             if url:
                 self.base_url = url
 
@@ -129,14 +140,10 @@ class NikkeiScraper:
                 return []
 
             announcements = self.parse_announcements(html_content)
-
             upward_revisions = []
 
             for announcement in announcements:
-                # 新しい発表かチェック
-                announcement_id = (
-                    f"{announcement.get('symbol', '')}-{announcement.get('title', '')[:50]}"
-                )
+                announcement_id = self._announcement_id(announcement)
 
                 # 初回読み込み時は既存のニュースをすべて処理済みとして記録するが、通知はしない
                 if self.is_initial_load:
@@ -144,108 +151,66 @@ class NikkeiScraper:
                     continue
 
                 if announcement_id in self.processed_announcements:
-                    if announcement_id == f"{announcements[0].get('symbol', '')}-{announcements[0].get('title', '')[:50]}":
-                        logger.info(
-                            f"既に処理済みの発表: {announcement['company_name']} ({announcement['symbol']}) - {announcement['title'][:50]}..."
-                        )
                     continue
 
-                # 上方修正かチェック
-                is_upward, matched_keyword = self.is_upward_revision(announcement["title"])
+                title = announcement.get("title") or ""
+                label = f"{announcement.get('company_name')} ({announcement.get('symbol')}) - {title[:50]}"
+                is_upward, matched_keyword = self.is_upward_revision(title)
                 if is_upward:
                     announcement["matched_keyword"] = matched_keyword
                     upward_revisions.append(announcement)
-                    logger.info(
-                        f"上方修正を検出（キーワード: {matched_keyword}）: {announcement['company_name']} ({announcement['symbol']}) - {announcement['title'][:50]}..."
-                    )
+                    logger.info(f"上方修正を検出（キーワード: {matched_keyword}）: {label}")
                 else:
-                    logger.info(
-                        f"上方修正ではない: {announcement['company_name']} ({announcement['symbol']}) - {announcement['title'][:50]}..."
-                    )
+                    logger.info(f"上方修正ではない: {label}")
                 self.processed_announcements.add(announcement_id)
 
-            # URLを元に戻す
-            if url:
-                self.base_url = original_url
-
             # 初回読み込み完了後にフラグをfalseに設定
-            if self.is_initial_load:
-                self.is_initial_load = False
-
+            self.is_initial_load = False
             return upward_revisions
         except Exception as e:
             logger.error(f"上方修正の検出中にエラーが発生: {e}")
             return []
+        finally:
+            self.base_url = original_url
 
-    def is_trading_time(self) -> bool:
-        """現在が取引時間内かどうかを判定する"""
-        now = datetime.now()
-        
-        # 土日祝日は取引なし
-        if now.weekday() >= 5 or jpholiday.is_holiday(now.date()):
-            return False
-        
-        current_time = now.time()
-        
-        # 前場: 9:00-11:30
-        morning_start = dt_time(9, 0)
-        morning_end = dt_time(11, 30)
-        
-        # 後場: 12:30-15:00
-        afternoon_start = dt_time(12, 30)
-        afternoon_end = dt_time(15, 0)
-        
-        return (morning_start <= current_time <= morning_end) or (afternoon_start <= current_time <= afternoon_end)
+    def is_trading_time(self, now: Optional[datetime] = None) -> bool:
+        """現在が取引時間内（前場 9:00-11:30 / 後場 12:30-15:30、東証の営業日）かどうかを判定する"""
+        now = now or datetime.now()
+        return is_market_day(now) and in_session(now)
 
-    def get_next_trading_time(self) -> datetime:
-        """次の取引開始時刻を取得する"""
-        now = datetime.now()
-        
-        # 土日祝日の場合は次の営業日の前場開始時刻を返す
-        if now.weekday() >= 5 or jpholiday.is_holiday(now.date()):
-            next_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
-            # 同日が土日祝日の場合は翌日から開始
-            if now.weekday() >= 5 or jpholiday.is_holiday(now.date()):
-                next_time += timedelta(days=1)
-            # 土日祝日をスキップ
-            while next_time.weekday() >= 5 or jpholiday.is_holiday(next_time.date()):
-                next_time += timedelta(days=1)
-            return next_time
-        
-        # 現在時刻が前場終了後、後場開始前の場合
-        if dt_time(11, 30) < now.time() < dt_time(12, 30):
-            next_time = now.replace(hour=12, minute=30, second=0, microsecond=0)
-            return next_time
-        
-        # 現在時刻が後場終了後の場合
-        if now.time() > dt_time(15, 0):
-            # 翌日の前場開始時刻
-            next_time = now.replace(hour=9, minute=0, second=0, microsecond=0) + timedelta(days=1)
-            # 土日祝日の場合は次の営業日までスキップ
-            while next_time.weekday() >= 5 or jpholiday.is_holiday(next_time.date()):
-                next_time += timedelta(days=1)
-            return next_time
-        
-        # 現在時刻が前場開始前の場合
-        if now.time() < dt_time(9, 0):
-            next_time = now.replace(hour=9, minute=0, second=0, microsecond=0)
-            return next_time
-        
-        return now
+    def get_next_trading_time(self, now: Optional[datetime] = None) -> datetime:
+        """次の取引開始時刻（取引時間中なら now）を取得する"""
+        now = now or datetime.now()
+        if self.is_trading_time(now):
+            return now
+        day = now.date()
+        if is_market_day(day):
+            for start in (dt_time(9, 0), dt_time(12, 30)):
+                if now.time() < start:
+                    return datetime.combine(day, start)
+        day += timedelta(days=1)
+        while not is_market_day(day):
+            day += timedelta(days=1)
+        return datetime.combine(day, dt_time(9, 0))
 
-    def run_continuous_monitoring(self, interval_seconds: int = 30) -> List[str]:
+    def run_continuous_monitoring(
+        self,
+        interval_seconds: int = 30,
+        on_detect: Optional[Callable[[Dict], None]] = None,
+        on_poll: Optional[Callable[[], None]] = None,
+    ) -> Optional[List[str]]:
         """継続的な監視を実行する
 
         Args:
             interval_seconds (int): 監視間隔（秒）
+            on_detect: 上方修正を検出するたびに呼ぶ関数。指定すると Ctrl+C まで監視を続ける。
+                       省略時は従来どおり、最初に検出した時点で銘柄コードのリストを返す
+            on_poll: 取引時間中、毎回の確認のたびに呼ぶ関数（注文状態の確認など）
 
         Returns:
-            List[str]: 上方修正された企業のSymbolのリスト
+            List[str]: 上方修正された企業のSymbolのリスト（on_detect 指定時・Ctrl+C で停止した場合は None）
         """
         logger.info(f"上方修正監視を開始します（{interval_seconds}秒間隔）")
-
-        # 上方修正された企業のSymbolを保持するリスト
-        upward_revision_symbols = []
 
         while True:
             try:
@@ -253,33 +218,35 @@ class NikkeiScraper:
                 if not self.is_trading_time():
                     next_trading_time = self.get_next_trading_time()
                     logger.info(f"取引時間外です。次の取引開始時刻 {next_trading_time} まで待機します。")
-                    
-                    # 次の取引開始時刻まで待機
+
                     while datetime.now() < next_trading_time:
-                        time.sleep(60)  # 1分ごとにチェック
-                    
-                    # 取引開始時に初回読み込みを実行
+                        remaining = (next_trading_time - datetime.now()).total_seconds()
+                        time.sleep(max(1.0, min(60.0, remaining)))
+
+                    # 取引時間外（夜間・昼休み）に出た開示は寄り付きで織り込まれるので、
+                    # 通知・発注せずに処理済みとして記録する
                     logger.info("取引開始時刻になりました。初回読み込みを実行します。")
+                    self.is_initial_load = True
                     self.detect_upward_revisions()
                     logger.info("初回読み込み完了。新しい上方修正のニュースを監視開始します。")
                     continue
 
                 # 取引時間内の場合
-                upward_revisions = self.detect_upward_revisions()
+                for revision in self.detect_upward_revisions():
+                    self.handle_detected_revision(revision)
+                    if on_detect is not None:
+                        on_detect(revision)
+                    elif revision.get("symbol"):
+                        return [revision["symbol"]]
 
-                if upward_revisions:
-                    for revision in upward_revisions:
-                        self.handle_detected_revision(revision)
-                        # Symbolをリストに追加
-                        if revision.get("symbol"):
-                            upward_revision_symbols.append(revision["symbol"])
-                            return upward_revision_symbols
+                if on_poll is not None:
+                    on_poll()
 
                 time.sleep(interval_seconds)
 
             except KeyboardInterrupt:
                 logger.info("監視を停止します")
-                break
+                return None
             except Exception as e:
                 logger.error(f"監視中にエラーが発生: {e}")
                 time.sleep(10)  # エラー時は10秒待機

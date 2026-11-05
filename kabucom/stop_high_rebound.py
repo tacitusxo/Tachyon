@@ -42,6 +42,7 @@ from special_quote import (
     SIGN_SPECIAL_QUOTE, KabuApi, KabuBroker, PaperBroker, Phase,
     SpecialQuoteTrade, _env_bool, _env_time, in_session, is_market_day,
 )
+from price_limit import upper_limit
 from tick_size import add_ticks, round_up_to_tick
 from utils import calculate_purchase_quantity
 
@@ -334,7 +335,7 @@ class StopHighReboundEngine:
                 del self.active[symbol]
                 if trade.filled_qty > 0:
                     self.traded_today.add(symbol)
-                else:
+                elif symbol in self.watchers:
                     self.watchers[symbol].attempts += 1
 
         if self.in_entry_window(now):
@@ -358,6 +359,8 @@ class StopHighReboundEngine:
     def _enter(self, watcher: DipWatcher, board: dict, now: datetime):
         # kabu API は名称が逆: BidPrice が最良売気配。すぐ約定させるため売気配で指値
         price = board.get("BidPrice") or board.get("CurrentPrice")
+        if not price:
+            return
         if price < self.config.min_price or (self.config.max_price and price > self.config.max_price):
             watcher.gave_up = True
             return
@@ -366,9 +369,11 @@ class StopHighReboundEngine:
             logger.info(f"[{watcher.symbol}] 予算内で購入できないためスキップ（{price}円）")
             watcher.gave_up = True
             return
+        prev_close = board.get("PreviousClose") or watcher.prev_close
         trade = ReboundTrade(
             symbol=watcher.symbol, name=watcher.name, price_range_group=watcher.price_range_group,
             qty=qty, broker=self.broker, config=self.config,
+            upper_limit=upper_limit(prev_close) if prev_close else None,
         )
         logger.info(f"[{watcher.symbol} {watcher.name}] 基準値 {watcher.peak} → 安値 {watcher.trough} "
                     f"→ 現在値 {board.get('CurrentPrice')}")

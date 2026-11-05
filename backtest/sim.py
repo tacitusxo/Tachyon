@@ -88,8 +88,10 @@ class Trade:
 
 
 def make_trade(strategy: str, code: str, name: str, entry: PricePoint, budget: float,
-               exit_: Exit, fee_rate: float, note: str = "") -> Optional[Trade]:
-    qty = calculate_purchase_quantity(entry[1], budget)
+               exit_: Exit, fee_rate: float, note: str = "",
+               sizing_price: Optional[float] = None) -> Optional[Trade]:
+    """sizing_price: 株数の計算に使う価格（成行買いは値幅上限で余力を拘束されるため。省略時は約定価格）"""
+    qty = calculate_purchase_quantity(sizing_price or entry[1], budget)
     if qty <= 0:
         return None
     fee = (entry[1] + exit_.price) * qty * fee_rate

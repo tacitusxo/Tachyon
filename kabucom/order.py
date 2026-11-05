@@ -17,14 +17,19 @@ logger = logging.getLogger(__name__)
 
 def send_order(token: str, symbol: str, account_type: int, quantity: int, price: float):
     """
-    指定された銘柄に対して発注を行う
+    指定された銘柄を成行で買う（現物）
+
+    以前はここで「価格の1.2倍をトリガーにした逆指値」を付けていたが、それは
+    「1.2倍以上になったら成行で“買う”」注文（UnderOver=2・Side=買い）で利確にならず、
+    FrontOrderType=10（成行）では逆指値条件自体も使われない。利確は約定後に別の売り注文で出す
+    （main.py の UpwardRevisionTrader を参照）。
 
     Args:
         token (str): APIトークン
         symbol (str): 証券コード
         account_type (int): 口座種別
-        quantity (int, optional): 注文数量. Defaults to 100.
-        price (float, optional): トリガー価格の基準値. Defaults to 0.
+        quantity (int): 注文数量
+        price (float): 参考価格（ログ用。成行なので注文には使わない）
 
     Returns:
         bool: 発注が成功したかどうか
@@ -42,13 +47,6 @@ def send_order(token: str, symbol: str, account_type: int, quantity: int, price:
         'FrontOrderType': 10,  # 成行注文
         'Price': 0,
         'ExpireDay': 0,
-        'ReverseLimitOrder': {
-            'TriggerSec': 1,
-            'TriggerPrice': float(price * 1.2),  # 価格の1.2倍をトリガー価格として設定
-            'UnderOver': 2,
-            'AfterHitOrderType': 1,
-            'AfterHitPrice': 0
-        }
     }
     order_json_data = json.dumps(order_obj).encode('utf-8')
 
@@ -63,7 +61,7 @@ def send_order(token: str, symbol: str, account_type: int, quantity: int, price:
             logger.info(f"{res.status} {res.reason}")
             content = json.loads(res.read())
             logger.info(pprint.pformat(content))
-            return True
+            return content.get("Result") == 0
     except urllib.error.HTTPError as e:
         logger.error(e)
         content = json.loads(e.read())
@@ -80,8 +78,8 @@ if __name__ == "__main__":
     # トークンを取得
     token = get_token(api_password)
     
-    # テスト用の銘柄
-    symbol = "6573"  # KDDI
+    # テスト用の銘柄（実際に成行で買い注文が出るので注意）
+    symbol = "6573"
     
     # ボード情報を取得
     board_info = get_board_info(symbol, token)

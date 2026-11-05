@@ -237,6 +237,14 @@ class KabuBroker:
             "FrontOrderType": 20, "Price": price, "ExpireDay": 0,
         })
 
+    def buy_market(self, symbol: str, qty: int) -> Optional[str]:
+        return self._send({
+            "Symbol": symbol, "Exchange": 1, "SecurityType": 1,
+            "Side": "2", "CashMargin": 1, "DelivType": 2, "FundType": "02",
+            "AccountType": self.account_type, "Qty": qty,
+            "FrontOrderType": 10, "Price": 0, "ExpireDay": 0,
+        })
+
     def sell_limit(self, symbol: str, qty: int, price: float) -> Optional[str]:
         return self._send({
             "Symbol": symbol, "Exchange": 1, "SecurityType": 1,
@@ -294,6 +302,7 @@ class PaperBroker:
     """
     発注せずに板情報から約定を模擬するブローカー。
       - 指値買い: 特別気配が解消し、現在値が指値以下になったら現在値（≒寄り値）で約定
+      - 成行買い: 特別気配でなければ現在値で約定
       - 指値売り: 現在値が指値以上になったら指値で約定
       - 成行売り: 現在値で即約定
     実際より約定しやすい（楽観的な）想定なので、成績はあくまで参考値。
@@ -312,6 +321,9 @@ class PaperBroker:
 
     def buy_limit(self, symbol, qty, price):
         return self._new(_PaperOrder(symbol, "buy", qty, price))
+
+    def buy_market(self, symbol, qty):
+        return self._new(_PaperOrder(symbol, "buy", qty, None))
 
     def sell_limit(self, symbol, qty, price):
         return self._new(_PaperOrder(symbol, "sell", qty, price))
@@ -340,7 +352,7 @@ class PaperBroker:
             if order.finished or order.symbol != symbol:
                 continue
             fill_price = None
-            if order.side == "buy" and not special and current <= order.price:
+            if order.side == "buy" and not special and (order.price is None or current <= order.price):
                 fill_price = current
             elif order.side == "sell" and order.price is None:
                 fill_price = current
@@ -369,6 +381,7 @@ class SpecialQuoteTrade:
     qty: int
     broker: object
     config: SpecialQuoteConfig
+    upper_limit: Optional[float] = None    # 当日の値幅上限（利確指値がこれを超えると発注が拒否される）
 
     phase: Phase = Phase.BUYING
     initial_price: float = 0.0
@@ -490,6 +503,9 @@ class SpecialQuoteTrade:
         self.filled_qty, self.avg_price = status.cum_qty, status.avg_price
         self.pending_cancel = None
         self.tp_price, self.sl_price = self._exit_targets()
+        if self.upper_limit:
+            # ストップ高を超える指値は発注エラーになり、即座に成行で投げ売ることになるため上限で抑える
+            self.tp_price = min(self.tp_price, round_down_to_tick(self.upper_limit, self.price_range_group))
         self._info(f"約定 {self.filled_qty}株 @ {self.avg_price}  利確 {self.tp_price} / 損切り {self.sl_price}")
         self.tp_order_id = self.broker.sell_limit(self.symbol, self.filled_qty, self.tp_price)
         self.phase = Phase.HOLDING
@@ -670,7 +686,7 @@ class SpecialQuoteEngine:
             return
         trade = SpecialQuoteTrade(
             symbol=symbol, name=name, price_range_group=group,
-            qty=qty, broker=self.broker, config=self.config,
+            qty=qty, broker=self.broker, config=self.config, upper_limit=upper,
         )
         self.traded_today.add(symbol)
         if trade.start(quote, limit):

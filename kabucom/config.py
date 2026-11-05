@@ -28,21 +28,25 @@ def load_environment_variables():
         logger.warning(f"Failed to load .env file: {e}")
 
     api_password = os.getenv("KABUCOM_API_PASSWORD")
-    available_margin = float(os.getenv("AVAILABLE_MARGIN"))
-    account_type = int(os.getenv("KABUCOM_ACCOUNT_TYPE"))
-    interval_seconds = int(os.getenv("MONITORING_INTERVAL_SECONDS", "1"))
-
-    if api_password is None:
+    if not api_password:
         logger.error("Error: KABUCOM_API_PASSWORD environment variable is not set")
         exit(1)
 
+    try:
+        available_margin = float(os.getenv("AVAILABLE_MARGIN", ""))
+    except ValueError:
+        available_margin = 0.0
     if available_margin <= 0:
         logger.error("Error: AVAILABLE_MARGIN environment variable is not set or invalid")
         exit(1)
 
-    if account_type is None:
-        logger.error("Error: KABUCOM_ACCOUNT_TYPE environment variable is not set")
+    try:
+        account_type = int(os.getenv("KABUCOM_ACCOUNT_TYPE", ""))
+    except ValueError:
+        logger.error("Error: KABUCOM_ACCOUNT_TYPE environment variable is not set or invalid")
         exit(1)
+
+    interval_seconds = int(os.getenv("MONITORING_INTERVAL_SECONDS", "1"))
 
     logger.info(f"利用可能な余力: {available_margin:,.0f}円")
     logger.info(f"口座種別: {account_type}")

@@ -20,6 +20,10 @@ def calculate_purchase_quantity(price: float, available_margin: float) -> int:
     Returns:
         int: 購入可能な株数（100株単位で切り捨て）
     """
+    if not price or price <= 0:
+        logger.warning(f"価格が不正なため株数を計算できません: {price}")
+        return 0
+
     # 余裕を持たせるため、余力の90%までを使用
     usable_margin = available_margin * 0.9
     
